@@ -38,7 +38,6 @@ import Linkify from 'react-linkify';
 
 // Import XMTP dependencies
 import { Client } from '@xmtp/browser-sdk';
-import { toBytes } from "viem";
 
 // Setup parameter to toggle between Sepolia and local network
 const networkEnv = 'dev'; //  'dev' for Sepolia and 'production' for ethereum mainnet
@@ -541,7 +540,7 @@ function App() {
     try {
       setLoading(true);
 
-      let tempProvider, tempSigner, tempAccount, signedMessage;
+      let tempProvider, tempSigner, tempAccount, tempUsdcDecimals;
 
 
       if (!window.ethereum) {
@@ -554,10 +553,6 @@ function App() {
       tempAccount = await tempSigner.getAddress();
 
 
-      // Log signer and account details
-      console.log('Signer Address:', tempAccount);
-      console.log('Signer Test Message:', signedMessage);
-
       const tempMarketplaceContract = new Contract(
         palketAddress,
         palketAbi,
@@ -565,8 +560,7 @@ function App() {
       );
 
       const tempUsdcContract = new Contract(usdcAddress, usdcAbi, tempSigner);
-
-      const tempUsdcDecimals = await tempUsdcContract.decimals();
+      tempUsdcDecimals = await tempUsdcContract.decimals();
 
       setProvider(tempProvider);
       setSigner(tempSigner);
@@ -1208,7 +1202,7 @@ function App() {
         <Navbar bg="dark" variant="dark">
           <Container>
             <Navbar.Brand as={Link} to="/">
-              Palket: The pal-to-pal  market
+              Palket: The Pal-to-Pal  market
             </Navbar.Brand>
             <Nav className="ml-auto">
               <Nav.Link href="#">
@@ -1250,19 +1244,6 @@ function App() {
               <Card.Body>
                 <Card.Title>Mint Mock USDC</Card.Title>
                 <Form onSubmit={handleMintUSDC}>
-                  <Form.Group controlId="mintRecipient">
-                    <Form.Label>Recipient Address</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter recipient address (optional)"
-                      value={mintRecipient}
-                      onChange={(e) => setMintRecipient(e.target.value)}
-                    />
-                    <Form.Text className="text-muted">
-                      If left blank, USDC will be minted to your connected account.
-                    </Form.Text>
-                  </Form.Group>
-
                   <Form.Group controlId="mintAmount">
                     <Form.Label>Amount to Mint (USDC)</Form.Label>
                     <Form.Control
