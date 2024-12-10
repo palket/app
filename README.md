@@ -3,9 +3,12 @@
 ## Project Overview 
 Palket aims to simplify peer-to-peer trading of goods by providing:
 
-- Secure escrow: Funds are held by the smart contract until the offer is finalized.
-- Fair dispute resolution: If a finalized trade does not occur within a specified period, offers may be forfeited, returning funds appropriately.
-- On-chain reputation: Each finalized trade updates the sender’s average score, encouraging honest and reliable behavior.
+- **Secure escrow:** Funds are held by the smart contract until the offer is finalized.
+- **Lottery:** If a finalized trade does not occur within a specified period, offers may be forfeited, sending 80% of the funds to a random wallet from the wallets that have interacted with the contract.
+- **Incentives for fair conduct:**
+  - Both the receiver and the sender must provide a deposit of 50% of the product value to ensure fairness from both parties.
+  - When the receiver finalizes a trade, he/she also provides a score for the sender, which is stored in the smart contract. The average score as sender for any address can be retrived from the smart contract.
+  - If the receiver does not receive the expected product, he/she may decide to not finalize the offer and wait for the offer's forfeiture.
 
 This repository contains the frontend code that interacts with the on-chain smart contract and the XMTP messaging protocol. Through this frontend, users can:
 
