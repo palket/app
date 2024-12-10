@@ -28,6 +28,10 @@ Palket consists of three major components:
 - **XMTP Integration:**
   For private messaging, Palket integrates XMTP, a decentralized, end-to-end encrypted messaging protocol. This enables users to safely negotiate details or ask questions without leaving the platform.
 
+## Deployment Status: ***DEVELOPMENT***
+
+Currently the Palket smart contract is deployed in Sepolia testnet to test it before deploying it to Ethereum main network.
+
 ## Usage 
 This code is meant as a tool o interact with the smart contract, which contains the relevant information about the offers and user information. Therefore, you can deploy (and even modify) the frontend app code in your own computer, or just use the code deployment in Github Pages website.
 
