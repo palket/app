@@ -1,5 +1,5 @@
-# Palket: the Pal-to-Pal market
-![Palket Logo](public/palket.png)
+# Palket: the Pal-to-Pal market <img src="public/palket.png" alt="logo" width="75"/>
+
 ## Project Overview 
 Palket aims to simplify peer-to-peer trading of goods by providing:
 
@@ -21,7 +21,6 @@ Palket consists of three major components:
 
 - **Smart Contract (on Ethereum):**
   Stores all offers, user profiles, and handles the logic for escrow and states of each trade.
-  Note: Contract ABIs and addresses are stored in ./abis/artifacts/ and ./deployed_addresses.json.
 
 - **Frontend (React.js):**
   This repository hosts the React-based user interface that allows users to connect their wallet, interact with the contract, and use the XMTP chat. It retrieves offer details from the contract, and guides users through offer creation and acceptance flows.
@@ -35,10 +34,7 @@ This code is meant as a tool o interact with the smart contract, which contains 
 ### Using the Github Pages deployment
 You will need the MetaMask browser extension installed and configured.
 
-**Link:**
-```
-[https://palket.github.io/app/](https://palket.github.io/app/)
-```
+**Link:** https://palket.github.io/app/
 
 ### Deploying your own code
 #### Prerequisites
