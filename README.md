@@ -63,8 +63,8 @@ npm -v
 #### Environment Setup
 Clone this repository:
 ```
-git clone https://github.com/palket/palket-frontend.git
-cd palket-frontend
+git clone https://github.com/palket/app.git
+cd app
 ```
 Install dependencies:
 ```
