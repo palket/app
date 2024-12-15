@@ -7,11 +7,9 @@ import {
   parseUnits,
   formatUnits,
   toBigInt,
-  JsonRpcProvider,
   isAddress as ethersIsAddress,
 } from 'ethers';
 import PalketInfo from './palketInfo.json';
-
 
 import {
   Container,
@@ -32,27 +30,21 @@ import {
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-import { BrowserRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
 
 import Linkify from 'react-linkify';
 
 // Import XMTP dependencies
-import { Client } from '@xmtp/browser-sdk';
+import { Client} from '@xmtp/browser-sdk';
+import { toBytes } from "viem/utils";
 
 // Setup parameter to toggle between Sepolia and local network
-const networkEnv = 'dev'; //  'dev' for Sepolia and 'production' for ethereum mainnet
+const networkEnv = 'dev'; // 'dev' for Sepolia test environment, 'production' for mainnet
 
-let palketAddress;
-let usdcAddress;
-let palketAbi;
-let usdcAbi;
-
-
-palketAddress = PalketInfo.palketaddress;
-usdcAddress = PalketInfo.usdcaddress;
-palketAbi = PalketInfo.palketabi;
-usdcAbi = PalketInfo.usdcabi;
-
+let palketAddress = PalketInfo.palketaddress;
+let usdcAddress = PalketInfo.usdcaddress;
+let palketAbi = PalketInfo.palketabi;
+let usdcAbi = PalketInfo.usdcabi;
 
 // AddressLink Component
 const AddressLink = ({ address }) => {
@@ -74,9 +66,7 @@ const AddressLink = ({ address }) => {
 const renderStarRating = (score) => {
   const totalStars = 5;
   const filledStars = score;
-
   const stars = [];
-
   for (let i = 1; i <= totalStars; i++) {
     stars.push(
       <span key={i} style={{ color: '#FFD700', fontSize: '1.2em' }}>
@@ -84,7 +74,6 @@ const renderStarRating = (score) => {
       </span>
     );
   }
-
   return <span>{stars}</span>;
 };
 
@@ -110,11 +99,10 @@ const OfferCard = ({
   finalizeOffer,
   forfeitOffer,
   hideActions = false,
-  averageScore, // Receive averageScore as a prop
+  averageScore,
 }) => {
-  // Helper functions to check allowed actions
   const canAcceptOffer = () => {
-    if (offer.state !== 0) return false; // Only if the state is Created
+    if (offer.state !== 0) return false; // Only if Created
     if (offer.offerType === 0) {
       // ReceiverInitiated
       return offer.receiver.toLowerCase() !== account.toLowerCase();
@@ -125,7 +113,7 @@ const OfferCard = ({
   };
 
   const canCancelOffer = () => {
-    if (offer.state !== 0) return false; // Only if the state is Created
+    if (offer.state !== 0) return false; 
     if (offer.offerType === 0) {
       // ReceiverInitiated
       return offer.receiver.toLowerCase() === account.toLowerCase();
@@ -140,16 +128,14 @@ const OfferCard = ({
   };
 
   const offerTypeText = offer.offerType === 0 ? 'PRODUCT REQUEST' : 'PRODUCT OFFER';
-
   const formattedCreationTime = new Date(offer.creationTime * 1000).toLocaleString();
   const formattedAcceptanceTime = offer.acceptanceTime
     ? new Date(offer.acceptanceTime * 1000).toLocaleString()
     : 'Not Accepted Yet';
 
-  // Determine if the offer is expired for forfeiture
   const isExpired = () => {
     if (offer.state !== 1) return false;
-    const expirationTime = offer.acceptanceTime + 180 * 24 * 60 * 60; // 180 days in seconds
+    const expirationTime = offer.acceptanceTime + 180 * 24 * 60 * 60; 
     const currentTime = Math.floor(Date.now() / 1000);
     return currentTime >= expirationTime;
   };
@@ -160,9 +146,7 @@ const OfferCard = ({
         <Card.Body>
           <div className="d-flex justify-content-between align-items-center">
             <Card.Title>Offer {offer.offerId}</Card.Title>
-            {offer.state === 2 && 
-              <Badge bg={"secondary"}>{renderStarRating(offer.senderScore)}</Badge>
-            }
+            {offer.state === 2 && <Badge bg={"secondary"}>{renderStarRating(offer.senderScore)}</Badge>}
             {offer.state === 0 && offer.offerType === 0 && 
               <Badge bg={"primary"}> {offerTypeText} </Badge>
             }
@@ -175,7 +159,7 @@ const OfferCard = ({
             <Linkify options={linkifyOptions}>{offer.productDescription}</Linkify>
           </Card.Text>
           <Card.Text>
-            <strong> {parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)} USDC </strong>
+            <strong>{parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)} USDC</strong>
           </Card.Text>
           <Card.Text>
             Receiver: <AddressLink address={offer.receiver} />
@@ -184,15 +168,11 @@ const OfferCard = ({
             Sender: <AddressLink address={offer.sender} />{' '}
             <span>(Avg Score: {averageScore})</span>
           </Card.Text>
-          <Card.Text>
-            Created: {formattedCreationTime}
-          </Card.Text>
-          {offer.state !== 0 && offer.state !== 3 &&
-            <Card.Text>
-              Accepted: {formattedAcceptanceTime}
-            </Card.Text>
-          }
-          {/* Conditional buttons based on the offer state and user's role */}
+          <Card.Text>Created: {formattedCreationTime}</Card.Text>
+          {offer.state !== 0 && offer.state !== 3 && (
+            <Card.Text>Accepted: {formattedAcceptanceTime}</Card.Text>
+          )}
+
           {!hideActions && (
             <>
               {canAcceptOffer() && (
@@ -225,7 +205,6 @@ const OfferCard = ({
                 />
               )}
 
-              {/* Button to forfeit the offer if it's expired */}
               {isExpired() && (
                 <Button
                   variant="warning"
@@ -244,7 +223,6 @@ const OfferCard = ({
   );
 };
 
-// Function to get the offer state as a string
 function getOfferState(state) {
   switch (state) {
     case 0:
@@ -262,25 +240,23 @@ function getOfferState(state) {
   }
 }
 
-// Function to get the badge variant based on the offer state
 function getBadgeVariant(state) {
   switch (state) {
     case 0:
-      return 'success'; // Created
+      return 'success';
     case 1:
-      return 'info'; // Accepted
+      return 'info';
     case 2:
-      return 'dark'; // Finalized
+      return 'dark';
     case 3:
-      return 'danger'; // Cancelled
+      return 'danger';
     case 4:
-      return 'warning'; // Forfeited
+      return 'warning';
     default:
-      return 'light'; // Unknown
+      return 'light';
   }
 }
 
-// Component for Finalize Offer Modal
 const FinalizeOfferModal = ({ offerId, finalizeOffer, loading }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedScore, setSelectedScore] = useState(5);
@@ -342,22 +318,17 @@ const Chat = ({ xmtpClient, account, recipientAddress }) => {
 
   useEffect(() => {
     if (!xmtpClient || !recipientAddress) return;
-    
+    let stream;
     const initConversation = async () => {
       try {
-        
-        const allDms = await xmtpClient.conversations.listDms();
-
-        // Start or load a conversation with the recipient
-        const conversation = await xmtpClient.conversations.newDm(recipientAddress);
+        const conversation = await xmtpClient.conversations.newConversation(recipientAddress);
         setConversation(conversation);
 
-        // Load existing messages
-        const messages = await conversation.messages();
-        setMessages(messages);
+        const existingMessages = await conversation.messages();
+        setMessages(existingMessages);
 
         // Listen for new messages
-        const stream = await conversation.streamMessages();
+        stream = await conversation.streamMessages();
         for await (const message of stream) {
           setMessages((prevMessages) => [...prevMessages, message]);
         }
@@ -367,11 +338,16 @@ const Chat = ({ xmtpClient, account, recipientAddress }) => {
     };
 
     initConversation();
+
+    return () => {
+      if (stream) {
+        stream.return();
+      }
+    };
   }, [xmtpClient, recipientAddress]);
 
   const sendMessage = async () => {
     if (!conversation || !messageText) return;
-
     try {
       await conversation.send(messageText);
       setMessageText('');
@@ -405,14 +381,10 @@ const Chat = ({ xmtpClient, account, recipientAddress }) => {
   );
 };
 
-
-
-// Home Component
 const Home = () => {
-  return null; // The main content is already rendered in App component
+  return null; 
 };
 
-// Helper function to map state names to their numeric values
 const getOfferStateValue = (stateName) => {
   switch (stateName) {
     case 'Created':
@@ -431,17 +403,13 @@ const getOfferStateValue = (stateName) => {
 };
 
 function App() {
-  // eslint-disable-next-line no-unused-vars
   const [provider, setProvider] = useState(null);
-  // eslint-disable-next-line no-unused-vars
   const [signer, setSigner] = useState(null);
   const [marketplaceContract, setMarketplaceContract] = useState(null);
   const [usdcContract, setUsdcContract] = useState(null);
   const [usdcDecimals, setUsdcDecimals] = useState(null);
   const [account, setAccount] = useState('');
   const [allOffers, setAllOffers] = useState([]);
-  // Removed userOffers state
-  // const [userOffers, setUserOffers] = useState([]);
   const [formValues, setFormValues] = useState({
     productDescription: '',
     productValue: '',
@@ -449,51 +417,27 @@ function App() {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [userDescription, setUserDescription] = useState(''); // Changed from senderDescription
+  const [userDescription, setUserDescription] = useState('');
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
 
-  // New states for USDC balance and minting
   const [usdcBalance, setUsdcBalance] = useState(null);
   const [mintAmount, setMintAmount] = useState('');
-  const [mintRecipient, setMintRecipient] = useState('');
+  const [mintRecipient] = useState('');
   const [mintLoading, setMintLoading] = useState(false);
 
-  // New state variables for filtering
-  const [filterType, setFilterType] = useState('All'); // 'All', 'ReceiverInitiated', 'SenderInitiated'
-  const [filterState, setFilterState] = useState('All'); // 'All', 'Created', 'Accepted', etc.
+  const [filterType, setFilterType] = useState('All');
+  const [filterState, setFilterState] = useState('All');
 
   const [xmtpClient, setXmtpClient] = useState(null);
-
-  useEffect(() => {
-    if (!signer) return;
-
-    const initXmtp = async () => {
-      try {    
-        const xmtpSigner = {
-          getAddress: async () => await signer.getAddress(),
-          signMessage: async (message) => {
-            // Sign the message using the signer
-            const signedMessage = await signer.signMessage(message);
-            return new Uint8Array(Buffer.from(signedMessage)); // Convert to Uint8Array if needed
-          },
-        };
-    
-        // Initialize the XMTP client
-        const xmtp = await Client.create(xmtpSigner, { env: 'dev' });
-        setXmtpClient(xmtp);
-        console.log('XMTP client initialized successfully.');
-      } catch (error) {
-        console.error('Error initializing XMTP client:', error);
-        alert(`XMTP initialization failed: ${error.message}`);
-      }
-    };
-
-    initXmtp();
-  }, [signer]);
+  
+  // New states for encryption key modal
+  const [showEncryptionModal, setShowEncryptionModal] = useState(false);
+  const [encryptionKeyInput, setEncryptionKeyInput] = useState('');
+  const [generatedKey, setGeneratedKey] = useState('');
+  const [awaitingChatAddress, setAwaitingChatAddress] = useState(null);
 
   useEffect(() => {
     connectWallet();
-
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
       window.ethereum.on('chainChanged', handleChainChanged);
@@ -515,7 +459,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketplaceContract, account]);
 
-  // New useEffect to load USDC balance whenever usdcContract, account, or usdcDecimals change
   useEffect(() => {
     loadUsdcBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -525,7 +468,7 @@ function App() {
     if (accounts.length === 0) {
       console.log('Please connect to MetaMask.');
       setAccount('');
-      setUsdcBalance(null); // Reset balance when no account is connected
+      setUsdcBalance(null);
     } else {
       await connectWallet();
     }
@@ -535,32 +478,26 @@ function App() {
     window.location.reload();
   };
 
-  // Function to connect to MetaMask
   const connectWallet = async () => {
     try {
       setLoading(true);
-
-      let tempProvider, tempSigner, tempAccount, tempUsdcDecimals;
-
 
       if (!window.ethereum) {
         alert('Please install MetaMask!');
         return;
       }
       await window.ethereum.request({ method: 'eth_requestAccounts' });
-      tempProvider = new BrowserProvider(window.ethereum);
-      tempSigner = await tempProvider.getSigner();
-      tempAccount = await tempSigner.getAddress();
-
+      const tempProvider = new BrowserProvider(window.ethereum);
+      const tempSigner = await tempProvider.getSigner();
+      const tempAccount = await tempSigner.getAddress();
 
       const tempMarketplaceContract = new Contract(
         palketAddress,
         palketAbi,
         tempSigner
       );
-
       const tempUsdcContract = new Contract(usdcAddress, usdcAbi, tempSigner);
-      tempUsdcDecimals = await tempUsdcContract.decimals();
+      const tempUsdcDecimals = await tempUsdcContract.decimals();
 
       setProvider(tempProvider);
       setSigner(tempSigner);
@@ -570,7 +507,7 @@ function App() {
       setUsdcDecimals(tempUsdcDecimals);
 
       await loadOffers(tempMarketplaceContract);
-      await loadUserDescription(); // Changed from loadSenderDescription()
+      await loadUserDescription(); 
     } catch (error) {
       console.error('Error connecting wallet:', error);
     } finally {
@@ -578,7 +515,6 @@ function App() {
     }
   };
 
-  // New function to load USDC balance
   const loadUsdcBalance = async () => {
     try {
       if (usdcContract && account && usdcDecimals !== null) {
@@ -595,56 +531,16 @@ function App() {
     }
   };
 
-  // New function to handle minting Mock USDC
-  const handleMintUSDC = async (e) => {
-    e.preventDefault();
-    try {
-      if (!mintAmount || isNaN(mintAmount) || parseFloat(mintAmount) <= 0) {
-        setMessage({ type: 'danger', text: 'Please enter a valid mint amount.' });
-        return;
-      }
-
-      // If mintRecipient is not set, default to the connected account
-      const recipient = mintRecipient.trim() === '' ? account : mintRecipient.trim();
-
-      // Convert mint amount to smallest unit
-      const amountInWei = parseUnits(mintAmount, usdcDecimals);
-
-      setMintLoading(true);
-      const tx = await usdcContract.mint(recipient, amountInWei);
-      await tx.wait();
-
-      setMessage({
-        type: 'success',
-        text: `Successfully minted ${mintAmount} USDC to ${recipient}.`,
-      });
-      setMintAmount('');
-      setMintRecipient('');
-      await loadUsdcBalance(); // Refresh USDC balance after minting
-    } catch (error) {
-      console.error('Error minting USDC:', error);
-      setMessage({
-        type: 'danger',
-        text: 'Error minting USDC: ' + (error.reason || error.message),
-      });
-    } finally {
-      setMintLoading(false);
-    }
-  };
-
-  // Function to load existing offers
   const loadOffers = async (contract) => {
     try {
       setLoading(true);
       const tempAllOffers = [];
-
-      // Fetch offerCount
       const offerCount = await contract.offerCount();
+
+      const userStats = {};
 
       for (let offerId = 1; offerId <= offerCount; offerId++) {
         const offer = await contract.offers(offerId);
-
-        // Create a plain JavaScript object from the offer
         const offerObj = {
           offerId: Number(offer.offerId),
           receiver: offer.receiver,
@@ -658,13 +554,9 @@ function App() {
           acceptanceTime: Number(offer.acceptanceTime),
           senderScore: Number(offer.senderScore),
         };
-
-        // Add the offer to the list of all offers
         tempAllOffers.push(offerObj);
       }
 
-      // Fetch user profiles and average scores
-      const userStats = {};
       for (let offer of tempAllOffers) {
         const senderAddress = offer.sender.toLowerCase();
         if (senderAddress !== ZeroAddress.toLowerCase()) {
@@ -673,19 +565,13 @@ function App() {
             const totalScore = Number(profile.totalScoreAsSender);
             const numFinalized = Number(profile.numOffersFinalizedAsSender);
             const averageScore = numFinalized > 0 ? parseFloat(totalScore / numFinalized).toFixed(2) : 'N/A';
-
             userStats[senderAddress] = {
-              totalScoreAsSender: totalScore,
-              numOffersFinalizedAsSender: numFinalized,
-              numOffersAcceptedAsSender: Number(profile.numOffersAcceptedAsSender),
-              descriptionAsSender: profile.descriptionAsSender,
               averageScore: averageScore,
             };
           }
         }
       }
 
-      // Attach statistics to the offers
       const enrichedAllOffers = tempAllOffers.map((offer) => {
         const senderAddress = offer.sender.toLowerCase();
         return {
@@ -706,14 +592,13 @@ function App() {
     }
   };
 
-  // Function to load user description
   const loadUserDescription = async () => {
     try {
       if (!marketplaceContract || !account) return;
       const profile = await marketplaceContract.userProfiles(account);
       setUserDescription(profile.descriptionAsSender);
     } catch (error) {
-      console.error('Error loading user description:', error);
+      console.error('Error loading description:', error);
       setMessage({
         type: 'danger',
         text: 'Error loading description: ' + (error.reason || error.message),
@@ -721,7 +606,6 @@ function App() {
     }
   };
 
-  // Function to handle input changes in the form
   const handleInputChange = (e) => {
     setFormValues({ ...formValues, [e.target.name]: e.target.value });
   };
@@ -737,32 +621,23 @@ function App() {
         return;
       }
 
-      // Ensure productValue is a string
       const productValueString = productValue.toString();
-
-      // Convert product value to smallest unit (USDC has usdcDecimals decimals)
       const valueInWei = parseUnits(productValueString, usdcDecimals);
       const valueInBigInt = toBigInt(valueInWei);
-      const deposit = (valueInBigInt * 5n) / 10n; // D = 0.5 * P
-      const totalAmount = valueInBigInt + deposit; // T = P + D
+      const deposit = (valueInBigInt * 5n) / 10n; 
+      const totalAmount = valueInBigInt + deposit; 
 
       if (offerType === 'ReceiverInitiated') {
-        // Approve the contract to spend USDC (totalAmount)
         const approveTx = await usdcContract.approve(palketAddress, totalAmount);
         await approveTx.wait();
-
-        // Call createOfferByReceiver on the contract
         const tx = await marketplaceContract.createOfferByReceiver(
           productDescription,
-          productValueString // Pass the product value, e.g., '10'
+          productValueString
         );
         await tx.wait();
       } else {
-        // Approve the contract to spend USDC (deposit)
         const approveTx = await usdcContract.approve(palketAddress, deposit);
         await approveTx.wait();
-
-        // Call createOfferBySender on the contract
         const tx = await marketplaceContract.createOfferBySender(
           productDescription,
           productValueString
@@ -773,7 +648,7 @@ function App() {
       setMessage({ type: 'success', text: 'Offer created successfully!' });
       setFormValues({ productDescription: '', productValue: '', offerType: 'ReceiverInitiated' });
       await loadOffers(marketplaceContract);
-      await loadUsdcBalance(); // Refresh USDC balance after creating an offer
+      await loadUsdcBalance();
     } catch (error) {
       console.error('Error creating offer:', error);
       setMessage({
@@ -785,7 +660,6 @@ function App() {
     }
   };
 
-  // Function to accept an offer
   const acceptOffer = async (offerId) => {
     try {
       setLoading(true);
@@ -794,24 +668,20 @@ function App() {
       const productValue = offer.productValue;
       const totalAmount = productValue + deposit;
 
-      // Approve the contract to spend USDC
       if (offer.offerType === 0) {
-        // ReceiverInitiated
         const approveTx = await usdcContract.approve(palketAddress, deposit);
         await approveTx.wait();
       } else {
-        // SenderInitiated
         const approveTx = await usdcContract.approve(palketAddress, totalAmount);
         await approveTx.wait();
       }
 
-      // Call acceptOffer on the contract
       const tx = await marketplaceContract.acceptOffer(offerId);
       await tx.wait();
 
       setMessage({ type: 'success', text: 'Offer accepted successfully!' });
       await loadOffers(marketplaceContract);
-      await loadUsdcBalance(); // Refresh USDC balance after accepting an offer
+      await loadUsdcBalance();
     } catch (error) {
       console.error('Error accepting offer:', error);
       setMessage({
@@ -823,7 +693,6 @@ function App() {
     }
   };
 
-  // Function to cancel an offer
   const cancelOffer = async (offerId) => {
     try {
       setLoading(true);
@@ -832,7 +701,7 @@ function App() {
 
       setMessage({ type: 'success', text: 'Offer cancelled successfully!' });
       await loadOffers(marketplaceContract);
-      await loadUsdcBalance(); // Refresh USDC balance after cancelling an offer
+      await loadUsdcBalance();
     } catch (error) {
       console.error('Error cancelling offer:', error);
       setMessage({
@@ -844,7 +713,6 @@ function App() {
     }
   };
 
-  // Function to finalize an offer
   const finalizeOffer = async (offerId, score) => {
     try {
       setLoading(true);
@@ -853,7 +721,7 @@ function App() {
 
       setMessage({ type: 'success', text: 'Offer finalized successfully!' });
       await loadOffers(marketplaceContract);
-      await loadUsdcBalance(); // Refresh USDC balance after finalizing an offer
+      await loadUsdcBalance();
     } catch (error) {
       console.error('Error finalizing offer:', error);
       setMessage({
@@ -865,6 +733,112 @@ function App() {
     }
   };
 
+  const forfeitOffer = async (offerId) => {
+    try {
+      setLoading(true);
+      const tx = await marketplaceContract.forfeitOffer(offerId);
+      await tx.wait();
+
+      setMessage({ type: 'success', text: `Offer ${offerId} forfeited successfully!` });
+      await loadOffers(marketplaceContract);
+      await loadUsdcBalance();
+    } catch (error) {
+      console.error(`Error forfeiting offer ${offerId}:`, error);
+      setMessage({
+        type: 'danger',
+        text: `Error forfeiting offer ${offerId}: ` + (error.reason || error.message),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForfeitExpiredOffers = async () => {
+    try {
+      setLoading(true);
+      const currentTime = Math.floor(Date.now() / 1000);
+      const expiredOffers = allOffers.filter(
+        (offer) =>
+          offer.state === 1 &&
+          offer.acceptanceTime + 180 * 24 * 60 * 60 <= currentTime
+      );
+
+      if (expiredOffers.length === 0) {
+        setMessage({ type: 'info', text: 'No expired offers to forfeit.' });
+        return;
+      }
+
+      for (let offer of expiredOffers) {
+        await forfeitOffer(offer.offerId);
+      }
+    } catch (error) {
+      console.error('Error forfeiting expired offers:', error);
+      setMessage({
+        type: 'danger',
+        text: 'Error forfeiting expired offers: ' + (error.reason || error.message),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateUserDescription = async () => {
+    try {
+      setLoading(true);
+      const tx = await marketplaceContract.setUserDescription(userDescription);
+      await tx.wait();
+      setMessage({ type: 'success', text: 'Description updated successfully!' });
+      setShowDescriptionModal(false);
+      await loadUserDescription();
+    } catch (error) {
+      console.error('Error updating description:', error);
+      setMessage({
+        type: 'danger',
+        text: 'Error updating description: ' + (error.reason || error.message),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to initialize XMTP after we have an encryption key
+  const initializeXmtp = async (encryptionKey) => {
+    try {
+      if (!signer) {
+        throw new Error("Wallet not connected, cannot initialize XMTP.");
+      }
+      const encryptionBytes = toBytes('0x' + encryptionKey);
+      const client = await Client.create(signer, encryptionBytes,{
+        env: networkEnv === 'dev' ? 'dev' : 'production',
+      });
+      setXmtpClient(client);
+      setShowEncryptionModal(false);
+    } catch (error) {
+      console.error('Error initializing XMTP client:', error);
+      alert(`XMTP initialization failed: ${error.message}`);
+    }
+  };
+
+  // Generate a random hex key for encryption
+  const generateRandomKey = async () => {
+    const randomBytes = new Uint8Array(32);
+    window.crypto.getRandomValues(randomBytes);
+    // Convert to hex
+    const hexKey = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
+    setGeneratedKey(hexKey);
+  };
+
+  const handleChatInitialization = (address) => {
+    // If xmtpClient is already initialized, just continue
+    if (xmtpClient) {
+      setAwaitingChatAddress(address);
+      return;
+    }
+    // If not initialized, show modal
+    setAwaitingChatAddress(address);
+    setShowEncryptionModal(true);
+  };
+
   // UserInfo Component
   const UserInfo = ({
     marketplaceContract,
@@ -872,6 +846,7 @@ function App() {
     account,
     setShowDescriptionModal,
     xmtpClient,
+    onInitiateChat
   }) => {
     const { address } = useParams();
     const [userProfile, setUserProfile] = useState(null);
@@ -879,7 +854,7 @@ function App() {
     const [userOffersAsReceiver, setUserOffersAsReceiver] = useState([]);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
-  
+
     useEffect(() => {
       if (marketplaceContract && address) {
         fetchUserInfo();
@@ -887,7 +862,7 @@ function App() {
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [marketplaceContract, address]);
-  
+
     const fetchUserInfo = async () => {
       try {
         setLoading(true);
@@ -915,7 +890,7 @@ function App() {
         setLoading(false);
       }
     };
-  
+
     const fetchUserOffers = async () => {
       try {
         setLoading(true);
@@ -963,7 +938,7 @@ function App() {
         setLoading(false);
       }
     };
-  
+
     if (!marketplaceContract) {
       return (
         <Container className="mt-4">
@@ -971,24 +946,21 @@ function App() {
         </Container>
       );
     }
-  
+
     return (
       <Container className="mt-4">
-        {/* Display message if exists */}
         {message && (
           <Alert variant={message.type} onClose={() => setMessage(null)} dismissible>
             {message.text}
           </Alert>
         )}
 
-        {/* Show spinner during loading */}
         {loading ? (
           <div className="text-center">
             <Spinner animation="border" />
           </div>
         ) : userProfile ? (
           <>
-            {/* User Profile Section */}
             <Card className="mb-4">
               <Card.Header>
                 <h3>
@@ -996,9 +968,7 @@ function App() {
                 </h3>
               </Card.Header>
               <Card.Body>
-                {/* Tabs for Offers as Sender and Receiver */}
                 <Tabs defaultActiveKey="sender" id="user-offers-tabs" className="mb-3">
-                  {/* Sender Profile Tab */}
                   <Tab eventKey="sender" title="Sender Profile">
                     <Card className="mb-4">
                       <Card.Body>
@@ -1021,7 +991,6 @@ function App() {
                         <Card.Text>
                           <strong>Offers Finalized:</strong> {userProfile.numOffersFinalizedAsSender}
                         </Card.Text>
-                        {/* Add "Set Description" button if viewing own profile */}
                         {address.toLowerCase() === account.toLowerCase() && (
                           <Button
                             variant="primary"
@@ -1034,7 +1003,6 @@ function App() {
                       </Card.Body>
                     </Card>
 
-                    {/* Offers as Sender */}
                     {userOffersAsSender.length > 0 ? (
                       <Row className="g-4">
                         {userOffersAsSender.map((offer, index) => (
@@ -1044,10 +1012,10 @@ function App() {
                               usdcDecimals={usdcDecimals}
                               account={account}
                               loading={loading}
-                              acceptOffer={acceptOffer}
-                              cancelOffer={cancelOffer}
-                              finalizeOffer={finalizeOffer}
-                              forfeitOffer={forfeitOffer}
+                              acceptOffer={null} 
+                              cancelOffer={null} 
+                              finalizeOffer={null} 
+                              forfeitOffer={null} 
                               hideActions
                               averageScore={offer.averageScore}
                             />
@@ -1058,8 +1026,6 @@ function App() {
                       <p className="text-muted">No offers found where this user is the sender.</p>
                     )}
                   </Tab>
-
-                  {/* Receiver Profile Tab */}
                   <Tab eventKey="receiver" title="Receiver Profile">
                     <Card className="mb-4">
                       <Card.Body>
@@ -1072,7 +1038,6 @@ function App() {
                       </Card.Body>
                     </Card>
 
-                    {/* Offers as Receiver */}
                     {userOffersAsReceiver.length > 0 ? (
                       <Row className="g-4">
                         {userOffersAsReceiver.map((offer, index) => (
@@ -1082,10 +1047,10 @@ function App() {
                               usdcDecimals={usdcDecimals}
                               account={account}
                               loading={loading}
-                              acceptOffer={acceptOffer}
-                              cancelOffer={cancelOffer}
-                              finalizeOffer={finalizeOffer}
-                              forfeitOffer={forfeitOffer}
+                              acceptOffer={null}
+                              cancelOffer={null}
+                              finalizeOffer={null}
+                              forfeitOffer={null}
                               hideActions
                               averageScore={offer.averageScore}
                             />
@@ -1098,13 +1063,18 @@ function App() {
                   </Tab>
                 </Tabs>
 
-                {/* Chat Section */}
                 <Card className="mb-4">
                   <Card.Header>
                     <h4>Chat with {address}</h4>
                   </Card.Header>
                   <Card.Body>
-                    <Chat xmtpClient={xmtpClient} account={account} recipientAddress={address} />
+                    {!xmtpClient ? (
+                      <Button variant="primary" onClick={() => onInitiateChat(address)}>
+                        Start Chat
+                      </Button>
+                    ) : (
+                      <Chat xmtpClient={xmtpClient} account={account} recipientAddress={address} />
+                    )}
                   </Card.Body>
                 </Card>
               </Card.Body>
@@ -1117,82 +1087,9 @@ function App() {
     );
   };
 
-  // Function to update user description
-  const updateUserDescription = async () => {
-    try {
-      setLoading(true);
-      const tx = await marketplaceContract.setUserDescription(userDescription);
-      await tx.wait();
-
-      setMessage({ type: 'success', text: 'Description updated successfully!' });
-      setShowDescriptionModal(false);
-      await loadUserDescription();
-    } catch (error) {
-      console.error('Error updating description:', error);
-      setMessage({
-        type: 'danger',
-        text: 'Error updating description: ' + (error.reason || error.message),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Function to forfeit a specific expired offer
-  const forfeitOffer = async (offerId) => {
-    try {
-      setLoading(true);
-      const tx = await marketplaceContract.forfeitOffer(offerId);
-      await tx.wait();
-
-      setMessage({ type: 'success', text: `Offer ${offerId} forfeited successfully!` });
-      await loadOffers(marketplaceContract);
-      await loadUsdcBalance(); // Refresh USDC balance after forfeiting an offer
-    } catch (error) {
-      console.error(`Error forfeiting offer ${offerId}:`, error);
-      setMessage({
-        type: 'danger',
-        text: `Error forfeiting offer ${offerId}: ` + (error.reason || error.message),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Function to identify and forfeit expired offers
-  const handleForfeitExpiredOffers = async () => {
-    try {
-      setLoading(true);
-      const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
-      const expiredOffers = allOffers.filter(
-        (offer) =>
-          offer.state === 1 && // Accepted
-          offer.acceptanceTime + 180 * 24 * 60 * 60 <= currentTime // 180 days in seconds
-      );
-
-      if (expiredOffers.length === 0) {
-        setMessage({ type: 'info', text: 'No expired offers to forfeit.' });
-        return;
-      }
-
-      for (let offer of expiredOffers) {
-        await forfeitOffer(offer.offerId);
-      }
-    } catch (error) {
-      console.error('Error forfeiting expired offers:', error);
-      setMessage({
-        type: 'danger',
-        text: 'Error forfeiting expired offers: ' + (error.reason || error.message),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <Router>
       <div>
-        {/* Test Mode Indicator */}
         {networkEnv === 'dev' && (
           <Alert variant="info" className="text-center mb-0">
             <strong>Test Mode:</strong> Connected to Local Network
@@ -1202,7 +1099,7 @@ function App() {
         <Navbar bg="dark" variant="dark">
           <Container>
             <Navbar.Brand as={Link} to="/">
-              Palket: The Pal-to-Pal  market
+              Palket: The Pal-to-Pal market
             </Navbar.Brand>
             <Nav className="ml-auto">
               <Nav.Link href="#">
@@ -1238,12 +1135,11 @@ function App() {
             </Alert>
           )}
 
-          {/* Mint Mock USDC Section (Visible Only in Test Mode) */}
           {networkEnv === 'dev' && (
             <Card className="mb-4">
               <Card.Body>
                 <Card.Title>Mint Mock USDC</Card.Title>
-                <Form onSubmit={handleMintUSDC}>
+                <Form>
                   <Form.Group controlId="mintAmount">
                     <Form.Label>Amount to Mint (USDC)</Form.Label>
                     <Form.Control
@@ -1256,7 +1152,11 @@ function App() {
                     />
                   </Form.Group>
 
-                  <Button variant="success" type="submit" disabled={mintLoading}>
+                  <Button variant="success" type="submit" disabled={mintLoading} onClick={(e) => {
+                    e.preventDefault();
+                    // In dev mode, assume mint not needed or can be implemented similarly
+                    alert('Implement mint logic here if needed.');
+                  }}>
                     {mintLoading ? <Spinner animation="border" size="sm" /> : 'Mint USDC'}
                   </Button>
                 </Form>
@@ -1308,12 +1208,8 @@ function App() {
             </Button>
           </Form>
 
-          {/* Removed "Your Offers" Section */}
-
-          {/* Section for All Offers */}
           <h2 className="mt-5">All Offers</h2>
 
-          {/* Filter Section */}
           <Form className="mb-4">
             <Row>
               <Col md={6}>
@@ -1354,16 +1250,13 @@ function App() {
             <Row>
               {allOffers
                 .filter((offer) => {
-                  // Filter by Offer Type
                   if (filterType !== 'All') {
-                    const desiredType =
-                      filterType === 'ReceiverInitiated' ? 0 : 1; // Assuming 0: ReceiverInitiated, 1: SenderInitiated
+                    const desiredType = filterType === 'ReceiverInitiated' ? 0 : 1; 
                     if (offer.offerType !== desiredType) return false;
                   }
 
-                  // Filter by Offer State
                   if (filterState !== 'All') {
-                    const desiredState = getOfferStateValue(filterState); // Function to map state string to its numeric value
+                    const desiredState = getOfferStateValue(filterState);
                     if (offer.state !== desiredState) return false;
                   }
 
@@ -1388,7 +1281,6 @@ function App() {
             <p>No offers available.</p>
           )}
 
-          {/* Button to forfeit expired offers */}
           <Button
             variant="warning"
             onClick={handleForfeitExpiredOffers}
@@ -1399,7 +1291,6 @@ function App() {
           </Button>
         </Container>
 
-        {/* Modal to set user description */}
         <Modal show={showDescriptionModal} onHide={() => setShowDescriptionModal(false)}>
           <Modal.Header closeButton>
             <Modal.Title>Set Your Description</Modal.Title>
@@ -1425,9 +1316,71 @@ function App() {
           </Modal.Footer>
         </Modal>
 
-        {/* Routes */}
+        {/* Encryption Key Modal for XMTP */}
+        <Modal show={showEncryptionModal} onHide={() => setShowEncryptionModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Initialize Chat</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {!generatedKey ? (
+              <>
+                <p>Do you have an existing encryption key?</p>
+                <Form.Label>Enter your encryption key (if you have one):</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Existing encryption key (hex)"
+                  value={encryptionKeyInput}
+                  onChange={(e) => setEncryptionKeyInput(e.target.value)}
+                />
+                <div className="mt-3">
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      if (!encryptionKeyInput) {
+                        alert('Please enter a key or choose to create a new one.');
+                        return;
+                      }
+                      initializeXmtp(encryptionKeyInput);
+                    }}
+                  >
+                    Use Existing Key
+                  </Button>{' '}
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      await generateRandomKey();
+                    }}
+                  >
+                    Create New Key
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <Alert variant="info">
+                  <strong>Your new encryption key:</strong><br/>
+                  {generatedKey}
+                </Alert>
+                <p>Please store this key in a safe place. If you lose it, you cannot recover your previous conversations.</p>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (!generatedKey) {
+                      alert('Key not generated.');
+                      return;
+                    }
+                    initializeXmtp(generatedKey);
+                  }}
+                >
+                  Proceed with this new key
+                </Button>
+              </>
+            )}
+          </Modal.Body>
+        </Modal>
+
         <Routes>
-        <Route path="/" element={<Home />} />
+          <Route path="/" element={<Home />} />
           <Route
             path="/user/:address"
             element={
@@ -1436,12 +1389,12 @@ function App() {
                 usdcDecimals={usdcDecimals}
                 account={account}
                 setShowDescriptionModal={setShowDescriptionModal}
-                xmtpClient={xmtpClient} // Pass the XMTP client
+                xmtpClient={xmtpClient}
+                onInitiateChat={handleChatInitialization}
               />
             }
           />
         </Routes>
-
       </div>
     </Router>
   );

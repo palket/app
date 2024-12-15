@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 import { Buffer } from "buffer";
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    headers: {
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Opener-Policy": "same-origin",
+    },
+  },
   resolve: {
     alias: {
       process: "process/browser"
