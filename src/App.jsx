@@ -422,18 +422,13 @@ const Chat = ({ xmtpClient, account, recipientAddress }) => {
   useEffect(() => {
     if (!xmtpClient || !recipientAddress) return;
 
-    let stream;
     const initConversation = async () => {
       try {
-        const conv = await xmtpClient.conversations.newConversation(recipientAddress);
+        const conv = await xmtpClient.conversations.newDm(recipientAddress);
         setConversation(conv);
         const msgs = await conv.messages();
         setMessages(msgs);
 
-        stream = await conv.streamMessages();
-        for await (const message of stream) {
-          setMessages((prevMessages) => [...prevMessages, message]);
-        }
       } catch (error) {
         console.error('Error initializing conversation:', error);
       }
@@ -442,9 +437,7 @@ const Chat = ({ xmtpClient, account, recipientAddress }) => {
     initConversation();
 
     return () => {
-      if (stream) {
-        stream.return();
-      }
+      
     };
   }, [xmtpClient, recipientAddress]);
 
@@ -1289,6 +1282,20 @@ function App() {
     }
   };
 
+  function hexToBytes(hex) {
+    if (hex.startsWith('0x')) {
+        hex = hex.slice(2);
+    }
+    if (hex.length !== 64) {
+        throw new Error("Hex string must be 64 characters (32 bytes)");
+    }
+    const bytes = [];
+    for (let c = 0; c < hex.length; c += 2) {
+        bytes.push(parseInt(hex.substring(c, c + 2), 16));
+    }
+    return new Uint8Array(bytes);
+}
+
   const initializeXmtp = async (encryptionKey) => {
     try {
       if (!provider) {
@@ -1299,7 +1306,15 @@ function App() {
       }
   
       // Convert the user-input encryption key into bytes
-      const encryptionBytes = toBytes('0x' + encryptionKey);
+      let encryptionBytes;
+      try {
+          encryptionBytes = hexToBytes(encryptionKey);
+      } catch (hexError) {
+          // Handle hex conversion errors separately
+          console.error("Invalid hex key:", hexError.message);
+          alert(`Invalid encryption key: ${hexError.message}`);
+          return; // Stop initialization
+      }
   
       // Create an XMTP-compatible Signer object
       const xmtpSigner = {
@@ -1313,13 +1328,15 @@ function App() {
       };
   
       // Now create the XMTP client with that signer
+      console.log("Creating XMTP client");
       const client = await Client.create(xmtpSigner, encryptionBytes, {
         env: xmtpEnv, 
       });
-  
+      console.log("XMTP client created", client);
       // Store client in state
       setXmtpClient(client);
       setShowEncryptionModal(false);
+      console.log("Modal should now be closed");
   
     } catch (error) {
       console.error('Error initializing XMTP client:', error);
