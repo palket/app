@@ -1,0 +1,77 @@
+/* src/Chat.css */
+
+.chat-container {
+    display: flex;
+    height: 600px; /* Adjust as needed or make responsive */
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  
+  .conversations-list {
+    width: 25%; /* Adjust the width of the side panel */
+    border-right: 1px solid #ddd;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+  }
+  
+  .chat-window {
+    width: 75%; /* Adjust the width of the chat area */
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .chat-footer {
+    border-top: 1px solid #ddd;
+    padding: 10px;
+    background-color: #f8f9fa;
+  }
+  
+  .message-row {
+    display: flex;
+    margin-bottom: 8px;
+  }
+  
+  .message-bubble {
+    max-width: 60%;
+    padding: 10px;
+    border-radius: 16px;
+    line-height: 1.4;
+  }
+  
+  .bubble-me {
+    align-self: flex-end;
+    background-color: #007bff;
+    color: white;
+  }
+  
+  .bubble-them {
+    align-self: flex-start;
+    background-color: #f1f0f0;
+    color: #000;
+  }
+  
+  .message-meta {
+    font-size: 0.8rem;
+    color: #000; /* Changed from #777 to black for better visibility */
+    margin-top: 4px;
+    text-align: right;
+  }
+  
+  .no-conversation-selected {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #6c757d;
+  }
+  

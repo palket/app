@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@xmtp/browser-sdk": "^0.0.6",
+    "@xmtp/node-sdk": "^0.0.36",
     "bootstrap": "^5.3.3",
     "buffer": "^6.0.3",
     "coi-serviceworker": "^0.1.7",
