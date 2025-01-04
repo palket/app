@@ -31,7 +31,7 @@ import {
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-import { BrowserRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom'; // Removed Router and Routes imports
 
 import Linkify from 'react-linkify';
 
@@ -41,19 +41,27 @@ import { toBytes } from 'viem/utils';
 
 import Chat from './Chat';
 
+// Removed React Router components
+// import { BrowserRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
+
 const xmtpEnv = 'dev';
 
 // AddressLink Component
 const AddressLink = ({ address, onChat }) => {
-    if (!address || !ethersIsAddress(address)) {
+  if (!address || !ethersIsAddress(address)) {
     return <span className="text-muted">Unknown Address</span>;
   }
   return (
     <span>
-      <Link to={`/user/${address}`}>
+      <span
+        style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}
+        onClick={() => onChat(address)}
+      >
         {address.substring(0, 6)}...{address.substring(address.length - 4)}
-      </Link>
-      <Button variant="link" size="sm" onClick={() => onChat(address)}>Chat</Button>
+      </span>
+      <Button variant="link" size="sm" onClick={() => onChat(address)}>
+        Chat
+      </Button>
     </span>
   );
 };
@@ -247,7 +255,7 @@ const RequestParticipationModal = ({ show, onHide, loading, requestParticipation
             />
           </Form.Group>
         ) : (
-          <p>Click "Request" to participate. No bid needed for SenderInitiated offers.</p>
+          <p>Click "Request" to participate. No bid needed for Sender-Initiated offers.</p>
         )}
       </Modal.Body>
       <Modal.Footer>
@@ -322,93 +330,92 @@ const OfferCard = ({
   };
 
   return (
-    <Col md={4}>
-      <Card className="mb-4">
-        <Card.Body>
-          <div className="d-flex justify-content-between align-items-center">
-            <Card.Title>Offer {offer.offerId}</Card.Title>
-            {offer.state === 2 && <Badge bg="secondary">{renderStarRating(offer.senderScore)}</Badge>}
-            {offer.state === 0 && offer.offerType === 0 && <Badge bg="primary"> {offerTypeText} </Badge>}
-            {offer.state === 0 && offer.offerType === 1 && <Badge bg="secondary"> {offerTypeText} </Badge>}
-            <Badge bg={getBadgeVariant(offer.state)}>{getOfferState(offer.state)}</Badge>
-          </div>
-          <Card.Text>
-            <Linkify options={linkifyOptions}>{offer.productDescription}</Linkify>
-          </Card.Text>
-          <Card.Text>
-            <strong>{parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)} USDC</strong>
-          </Card.Text>
-          <Card.Text>
-            Receiver: <AddressLink address={offer.receiver} onChat={onChat} />
-          </Card.Text>
-          <Card.Text>
-            Sender: <AddressLink address={offer.sender} onChat={onChat} /> <span>(Avg Score: {averageScore})</span>
-          </Card.Text>
-          <Card.Text>Created: {formattedCreationTime}</Card.Text>
-          {offer.state !== 0 && offer.state !== 3 && <Card.Text>Accepted: {formattedAcceptanceTime}</Card.Text>}
+    <Card className="mb-4 w-100">
+      <Card.Body>
+        <div className="d-flex justify-content-between align-items-center">
+          <Card.Title>Offer {offer.offerId}</Card.Title>
+          {offer.state === 2 && <Badge bg="secondary">{renderStarRating(offer.senderScore)}</Badge>}
+          {offer.state === 0 && offer.offerType === 0 && <Badge bg="primary"> {offerTypeText} </Badge>}
+          {offer.state === 0 && offer.offerType === 1 && <Badge bg="secondary"> {offerTypeText} </Badge>}
+          <Badge bg={getBadgeVariant(offer.state)}>{getOfferState(offer.state)}</Badge>
+        </div>
+        <Card.Text>
+          <Linkify options={linkifyOptions}>{offer.productDescription}</Linkify>
+        </Card.Text>
+        <Card.Text>
+          <strong>{parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)} USDC</strong>
+        </Card.Text>
+        <Card.Text>
+          Receiver: <AddressLink address={offer.receiver} onChat={onChat} />
+        </Card.Text>
+        <Card.Text>
+          Sender: <AddressLink address={offer.sender} onChat={onChat} /> <span>(Avg Score: {averageScore})</span>
+        </Card.Text>
+        <Card.Text>Created: {formattedCreationTime}</Card.Text>
+        {offer.state !== 0 && offer.state !== 3 && <Card.Text>Accepted: {formattedAcceptanceTime}</Card.Text>}
 
-          {!hideActions && (
-            <>
-              {offer.state === 0 &&
-                ((offer.offerType === 0 && offer.receiver.toLowerCase() !== account.toLowerCase()) ||
-                  (offer.offerType === 1 && offer.sender.toLowerCase() !== account.toLowerCase())) && (
-                  <Button
-                    variant="success"
-                    onClick={() => requestParticipationForOffer(offer)}
-                    disabled={loading}
-                    className="mr-2 mt-2"
-                  >
-                    {loading ? <Spinner animation="border" size="sm" /> : 'Request Participation'}
-                  </Button>
-                )}
-
-              {offer.state === 0 &&
-                ((offer.offerType === 0 && offer.receiver.toLowerCase() === account.toLowerCase()) ||
-                  (offer.offerType === 1 && offer.sender.toLowerCase() === account.toLowerCase())) && (
-                  <Button
-                    variant="primary"
-                    onClick={() => canChooseParticipantForOffer(offer)}
-                    disabled={loading}
-                    className="mr-2 mt-2"
-                  >
-                    {loading ? <Spinner animation="border" size="sm" /> : 'Choose Participant'}
-                  </Button>
-                )}
-
-              {canCancelOffer() && (
+        {!hideActions && (
+          <>
+            {offer.state === 0 &&
+              ((offer.offerType === 0 && offer.receiver.toLowerCase() !== account.toLowerCase()) ||
+                (offer.offerType === 1 && offer.sender.toLowerCase() !== account.toLowerCase())) && (
                 <Button
-                  variant="danger"
-                  onClick={() => cancelOffer(offer.offerId)}
+                  variant="success"
+                  onClick={() => requestParticipationForOffer(offer)}
                   disabled={loading}
                   className="mr-2 mt-2"
                 >
-                  {loading ? <Spinner animation="border" size="sm" /> : 'Cancel Offer'}
+                  {loading ? <Spinner animation="border" size="sm" /> : 'Request Participation'}
                 </Button>
               )}
 
-              {offer.state === 1 && offer.receiver.toLowerCase() === account.toLowerCase() && (
-                <FinalizeOfferModal
-                  offerId={offer.offerId}
-                  finalizeOffer={finalizeOffer}
-                  loading={loading}
-                />
-              )}
-
-              {isExpired && (
+            {offer.state === 0 &&
+              ((offer.offerType === 0 && offer.receiver.toLowerCase() === account.toLowerCase()) ||
+                (offer.offerType === 1 && offer.sender.toLowerCase() === account.toLowerCase())) && (
                 <Button
-                  variant="warning"
-                  onClick={() => forfeitOffer(offer.offerId)}
+                  variant="primary"
+                  onClick={() => canChooseParticipantForOffer(offer)}
                   disabled={loading}
-                  className="mt-2"
+                  className="mr-2 mt-2"
                 >
-                  {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Offer'}
+                  {loading ? <Spinner animation="border" size="sm" /> : 'Choose Participant'}
                 </Button>
               )}
-            </>
-          )}
-        </Card.Body>
-      </Card>
-    </Col>
+
+            {canCancelOffer() && (
+              <Button
+                variant="danger"
+                onClick={() => cancelOffer(offer.offerId)}
+                disabled={loading}
+                className="mr-2 mt-2"
+              >
+                {loading ? <Spinner animation="border" size="sm" /> : 'Cancel Offer'}
+              </Button>
+            )}
+
+            {offer.state === 1 && offer.receiver.toLowerCase() === account.toLowerCase() && (
+              <FinalizeOfferModal
+                offerId={offer.offerId}
+                finalizeOffer={finalizeOffer}
+                loading={loading}
+              />
+            )}
+
+            {isExpired && (
+              <Button
+                variant="warning"
+                onClick={() => forfeitOffer(offer.offerId)}
+                disabled={loading}
+                className="mt-2"
+              >
+                {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Offer'}
+              </Button>
+            )}
+          </>
+        )}
+      </Card.Body>
+    </Card>
+
   );
 
 };
@@ -418,32 +425,15 @@ const Home = () => {
   return null;
 };
 
-// Helper function to get offer state value
-const getOfferStateValue = (stateName) => {
-  switch (stateName) {
-    case 'Created':
-      return 0;
-    case 'Accepted':
-      return 1;
-    case 'Finalized':
-      return 2;
-    case 'Cancelled':
-      return 3;
-    case 'Forfeited':
-      return 4;
-    default:
-      return null;
-  }
-};
-
-// UserInfo Component
-const UserInfo = ({
+// UserProfile Component (New)
+const UserProfile = ({
   marketplaceContract,
   usdcDecimals,
   account,
+  userAddress,
   setShowDescriptionModal,
+  onChat,
 }) => {
-  const { address } = useParams();
   const [userProfile, setUserProfile] = useState(null);
   const [userOffersAsSender, setUserOffersAsSender] = useState([]);
   const [userOffersAsReceiver, setUserOffersAsReceiver] = useState([]);
@@ -451,16 +441,16 @@ const UserInfo = ({
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    if (marketplaceContract && address) {
+    if (marketplaceContract && userAddress) {
       fetchUserInfo();
       fetchUserOffers();
     }
-  }, [marketplaceContract, address]);
+  }, [marketplaceContract, userAddress]);
 
   const fetchUserInfo = async () => {
     try {
       setLoading(true);
-      const profile = await marketplaceContract.userProfiles(address);
+      const profile = await marketplaceContract.userProfiles(userAddress);
       const totalScore = Number(profile.totalScoreAsSender);
       const numFinalizedAsSender = Number(profile.numOffersFinalizedAsSender);
       const averageScoreAsSender =
@@ -496,7 +486,7 @@ const UserInfo = ({
         const offer = await marketplaceContract.offers(offerId);
         const offerSender = offer.sender.toLowerCase();
         const offerReceiver = offer.receiver.toLowerCase();
-        const userAddress = address.toLowerCase();
+        const userAddressLower = userAddress.toLowerCase();
 
         const offerObj = {
           offerId: Number(offer.offerId),
@@ -512,10 +502,10 @@ const UserInfo = ({
           senderScore: Number(offer.senderScore),
         };
 
-        if (offerSender === userAddress) {
+        if (offerSender === userAddressLower) {
           tempUserOffersAsSender.push(offerObj);
         }
-        if (offerReceiver === userAddress) {
+        if (offerReceiver === userAddressLower) {
           tempUserOffersAsReceiver.push(offerObj);
         }
       }
@@ -550,7 +540,7 @@ const UserInfo = ({
           <Card className="mb-4">
             <Card.Header>
               <h3>
-                User Profile <Badge bg="secondary">{address}</Badge>
+                User Profile <Badge bg="secondary">{userAddress}</Badge>
               </h3>
             </Card.Header>
             <Card.Body>
@@ -577,7 +567,7 @@ const UserInfo = ({
                       <Card.Text>
                         <strong>Offers Finalized:</strong> {userProfile.numOffersFinalizedAsSender}
                       </Card.Text>
-                      {address.toLowerCase() === account.toLowerCase() && (
+                      {userAddress.toLowerCase() === account.toLowerCase() && (
                         <Button
                           variant="primary"
                           onClick={() => setShowDescriptionModal(true)}
@@ -592,7 +582,7 @@ const UserInfo = ({
                   {userOffersAsSender.length > 0 ? (
                     <Row className="g-4">
                       {userOffersAsSender.map((offer, index) => (
-                        <Col key={index}>
+                        <Col key={index} lg={12} md={12} sm={12}>
                           <OfferCard
                             offer={offer}
                             usdcDecimals={usdcDecimals}
@@ -606,7 +596,7 @@ const UserInfo = ({
                             requestParticipationForOffer={() => {}}
                             canChooseParticipantForOffer={() => {}}
                             isExpired={false}
-                            onChat={(address) => setCurrentChatAddress(address)}
+                            onChat={onChat}
                           />
                         </Col>
                       ))}
@@ -631,7 +621,7 @@ const UserInfo = ({
                   {userOffersAsReceiver.length > 0 ? (
                     <Row className="g-4">
                       {userOffersAsReceiver.map((offer, index) => (
-                        <Col key={index}>
+                        <Col key={index} lg={12} md={12} sm={12}>
                           <OfferCard
                             offer={offer}
                             usdcDecimals={usdcDecimals}
@@ -645,6 +635,7 @@ const UserInfo = ({
                             requestParticipationForOffer={() => {}}
                             canChooseParticipantForOffer={() => {}}
                             isExpired={false}
+                            onChat={onChat}
                           />
                         </Col>
                       ))}
@@ -662,9 +653,10 @@ const UserInfo = ({
       )}
     </Container>
   );
+
+  // Removed UserInfo component as it's now handled within the same page
 };
 
-// Main App Component
 function App() {
   const [networkEnv, setNetworkEnv] = useState('sepolia');
   const networkKeys = Object.keys(PalketInfo.networks);
@@ -732,6 +724,7 @@ function App() {
   const [loadingParticipants, setLoadingParticipants] = useState(false);
 
   const [currentChatAddress, setCurrentChatAddress] = useState(null);
+  const [selectedProfileAddress, setSelectedProfileAddress] = useState(null); // New state for user profiles
 
   useEffect(() => {
     initNetwork();
@@ -759,6 +752,11 @@ function App() {
     loadUsdcBalance();
     loadNativeBalance();
   }, [usdcContract, account, usdcDecimals, provider]);
+
+  const onChat = (address) => {
+    setCurrentChatAddress(address);
+    handleChatInitialization();
+  };
 
   const loadContractParams = async () => {
     try {
@@ -1095,10 +1093,10 @@ function App() {
   };
 
   // Updated createOffer to account for depositPercentage from the contract
-  const createOffer = async () => {
+  const createOffer = async (offerType) => {
     try {
       setLoading(true);
-      const { productDescription, productValue, offerType } = formValues;
+      const { productDescription, productValue } = formValues;
 
       if (!productDescription) {
         setMessage({ type: 'danger', text: 'Please provide a product description.' });
@@ -1522,235 +1520,7 @@ function App() {
     }
   };
 
-  const UserInfo = ({
-    marketplaceContract,
-    usdcDecimals,
-    account,
-    setShowDescriptionModal,
-    xmtpClient,
-    onInitiateChat,
-  }) => {
-    const { address } = useParams();
-    const [userProfile, setUserProfile] = useState(null);
-    const [userOffersAsSender, setUserOffersAsSender] = useState([]);
-    const [userOffersAsReceiver, setUserOffersAsReceiver] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState(null);
-
-    useEffect(() => {
-      if (marketplaceContract && address) {
-        fetchUserInfo();
-        fetchUserOffers();
-      }
-    }, [marketplaceContract, address]);
-
-    const fetchUserInfo = async () => {
-      try {
-        setLoading(true);
-        const profile = await marketplaceContract.userProfiles(address);
-        const totalScore = Number(profile.totalScoreAsSender);
-        const numFinalizedAsSender = Number(profile.numOffersFinalizedAsSender);
-        const averageScoreAsSender =
-          numFinalizedAsSender > 0 ? parseFloat(totalScore / numFinalizedAsSender).toFixed(2) : 'N/A';
-
-        setUserProfile({
-          descriptionAsSender: profile.descriptionAsSender,
-          averageScoreAsSender: averageScoreAsSender,
-          numOffersAcceptedAsSender: Number(profile.numOffersAcceptedAsSender),
-          numOffersFinalizedAsSender: numFinalizedAsSender,
-          numOffersAcceptedAsReceiver: Number(profile.numOffersAcceptedAsReceiver),
-          numOffersFinalizedAsReceiver: Number(profile.numOffersFinalizedAsReceiver),
-        });
-      } catch (error) {
-        console.error('Error fetching user info:', error);
-        setMessage({
-          type: 'danger',
-          text: 'Error fetching user information: ' + (error.reason || error.message),
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchUserOffers = async () => {
-      try {
-        setLoading(true);
-        const offerCount = await marketplaceContract.offerCount();
-        const tempUserOffersAsSender = [];
-        const tempUserOffersAsReceiver = [];
-
-        for (let offerId = 1; offerId <= offerCount; offerId++) {
-          const offer = await marketplaceContract.offers(offerId);
-          const offerSender = offer.sender.toLowerCase();
-          const offerReceiver = offer.receiver.toLowerCase();
-          const userAddress = address.toLowerCase();
-
-          const offerObj = {
-            offerId: Number(offer.offerId),
-            receiver: offer.receiver,
-            sender: offer.sender,
-            productDescription: offer.productDescription,
-            productValue: offer.productValue,
-            deposit: offer.deposit,
-            state: Number(offer.state),
-            offerType: Number(offer.offerType),
-            creationTime: Number(offer.creationTime),
-            acceptanceTime: Number(offer.acceptanceTime),
-            senderScore: Number(offer.senderScore),
-          };
-
-          if (offerSender === userAddress) {
-            tempUserOffersAsSender.push(offerObj);
-          }
-          if (offerReceiver === userAddress) {
-            tempUserOffersAsReceiver.push(offerObj);
-          }
-        }
-
-        setUserOffersAsSender(tempUserOffersAsSender);
-        setUserOffersAsReceiver(tempUserOffersAsReceiver);
-      } catch (error) {
-        console.error('Error fetching user offers:', error);
-        setMessage({
-          type: 'danger',
-          text: 'Error fetching user offers: ' + (error.reason || error.message),
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <Container className="mt-4">
-        {message && (
-          <Alert variant={message.type} onClose={() => setMessage(null)} dismissible>
-            {message.text}
-          </Alert>
-        )}
-
-        {loading ? (
-          <div className="text-center">
-            <Spinner animation="border" />
-          </div>
-        ) : userProfile ? (
-          <>
-            <Card className="mb-4">
-              <Card.Header>
-                <h3>
-                  User Profile <Badge bg="secondary">{address}</Badge>
-                </h3>
-              </Card.Header>
-              <Card.Body>
-                <Tabs defaultActiveKey="sender" id="user-offers-tabs" className="mb-3">
-                  <Tab eventKey="sender" title="Sender Profile">
-                    <Card className="mb-4">
-                      <Card.Body>
-                        <Card.Text>
-                          <strong>Description:</strong> {userProfile.descriptionAsSender || 'No description provided.'}
-                        </Card.Text>
-                        <Card.Text>
-                          <strong>Average Score:</strong>{' '}
-                          {userProfile.averageScoreAsSender !== 'N/A' ? (
-                            <>
-                              {renderStarRating(parseFloat(userProfile.averageScoreAsSender))} ({userProfile.averageScoreAsSender})
-                            </>
-                          ) : (
-                            'N/A'
-                          )}
-                        </Card.Text>
-                        <Card.Text>
-                          <strong>Offers Accepted:</strong> {userProfile.numOffersAcceptedAsSender}
-                        </Card.Text>
-                        <Card.Text>
-                          <strong>Offers Finalized:</strong> {userProfile.numOffersFinalizedAsSender}
-                        </Card.Text>
-                        {address.toLowerCase() === account.toLowerCase() && (
-                          <Button
-                            variant="primary"
-                            onClick={() => setShowDescriptionModal(true)}
-                            className="mt-3"
-                          >
-                            Set Description
-                          </Button>
-                        )}
-                      </Card.Body>
-                    </Card>
-
-                    {userOffersAsSender.length > 0 ? (
-                      <Row className="g-4">
-                        {userOffersAsSender.map((offer, index) => (
-                          <Col key={index}>
-                            <OfferCard
-                              offer={offer}
-                              usdcDecimals={usdcDecimals}
-                              account={account}
-                              loading={false}
-                              cancelOffer={() => {}}
-                              finalizeOffer={() => {}}
-                              forfeitOffer={() => {}}
-                              hideActions
-                              averageScore={offer.averageScore}
-                              requestParticipationForOffer={() => {}}
-                              canChooseParticipantForOffer={() => {}}
-                              isExpired={false}
-                              onChat={(address) => setCurrentChatAddress(address)}
-                            />
-                          </Col>
-                        ))}
-                      </Row>
-                    ) : (
-                      <p className="text-muted">No offers found where this user is the sender.</p>
-                    )}
-                  </Tab>
-
-                  <Tab eventKey="receiver" title="Receiver Profile">
-                    <Card className="mb-4">
-                      <Card.Body>
-                        <Card.Text>
-                          <strong>Offers Accepted:</strong> {userProfile.numOffersAcceptedAsReceiver}
-                        </Card.Text>
-                        <Card.Text>
-                          <strong>Offers Finalized:</strong> {userProfile.numOffersFinalizedAsReceiver}
-                        </Card.Text>
-                      </Card.Body>
-                    </Card>
-
-                    {userOffersAsReceiver.length > 0 ? (
-                      <Row className="g-4">
-                        {userOffersAsReceiver.map((offer, index) => (
-                          <Col key={index}>
-                            <OfferCard
-                              offer={offer}
-                              usdcDecimals={usdcDecimals}
-                              account={account}
-                              loading={false}
-                              cancelOffer={() => {}}
-                              finalizeOffer={() => {}}
-                              forfeitOffer={() => {}}
-                              hideActions
-                              averageScore={offer.averageScore}
-                              requestParticipationForOffer={() => {}}
-                              canChooseParticipantForOffer={() => {}}
-                              isExpired={false}
-                              onChat={(address) => setCurrentChatAddress(address)}
-                            />
-                          </Col>
-                        ))}
-                      </Row>
-                    ) : (
-                      <p className="text-muted">No offers found where this user is the receiver.</p>
-                    )}
-                  </Tab>
-                </Tabs>
-              </Card.Body>
-            </Card>
-          </>
-        ) : (
-          <p className="text-muted">No profile information available.</p>
-        )}
-      </Container>
-    );
-  };
+  // Removed UserInfo component here as it's now handled within the main App component
 
   const switchNetwork = async (key) => {
     setNetworkEnv(key);
@@ -1772,399 +1542,429 @@ function App() {
   };
 
   return (
-    <Router basename="/app">
-      <div>
-        {isTestnet === '1' && (
-          <Alert variant="info" className="text-center mb-4">
-            <strong>Test Mode:</strong> Connected to {networkName}
-            <Form onSubmit={handleMintUSDC} className="d-inline-flex align-items-center ms-3">
-              <Form.Group controlId="mintAmount" className="mb-0 me-2">
-                <Form.Control
-                  type="number"
-                  placeholder="Amount to Mint (USDC)"
-                  value={mintAmount}
-                  onChange={(e) => setMintAmount(e.target.value)}
-                  min="0"
-                  step="0.01"
-                  size="sm"
-                />
-              </Form.Group>
-              <Button variant="success" type="submit" disabled={mintLoading} size="sm">
-                {mintLoading ? <Spinner animation="border" size="sm" /> : 'Mint USDC'}
-              </Button>
-            </Form>
-          </Alert>
-        )}
+    <div>
+      {isTestnet === '1' && (
+        <Alert variant="info" className="text-center mb-4">
+          <strong>Test Mode:</strong> Connected to {networkName}
+          <Form onSubmit={handleMintUSDC} className="d-inline-flex align-items-center ms-3">
+            <Form.Group controlId="mintAmount" className="mb-0 me-2">
+              <Form.Control
+                type="number"
+                placeholder="Amount to Mint (USDC)"
+                value={mintAmount}
+                onChange={(e) => setMintAmount(e.target.value)}
+                min="0"
+                step="0.01"
+                size="sm"
+              />
+            </Form.Group>
+            <Button variant="success" type="submit" disabled={mintLoading} size="sm">
+              {mintLoading ? <Spinner animation="border" size="sm" /> : 'Mint USDC'}
+            </Button>
+          </Form>
+        </Alert>
+      )}
 
-        <Navbar bg="dark" variant="dark">
-          <Container fluid> {/* Changed to fluid */}
-            <Navbar.Brand as={Link} to="/">
-              Palket: The Pal-to-Pal Market
-            </Navbar.Brand>
-            <Nav className="ms-auto"> {/* Updated class to Bootstrap 5 */}
+      <Navbar bg="dark" variant="dark">
+        <Container fluid> {/* Changed to fluid */}
+          <Navbar.Brand href="#">
+            Palket: The Pal-to-Pal Market
+          </Navbar.Brand>
+          <Nav className="ms-auto"> {/* Updated class to Bootstrap 5 */}
+            <Nav.Link href="#">
+              {account
+                ? `Account: ${account.substring(0, 6)}...${account.substring(account.length - 4)}`
+                : 'Not connected'}
+            </Nav.Link>
+            {usdcBalance !== null && (
               <Nav.Link href="#">
-                {account
-                  ? `Account: ${account.substring(0, 6)}...${account.substring(account.length - 4)}`
-                  : 'Not connected'}
+                {nativeBalance !== null ? `${nativeBalance} ${currencySymbol} | ` : ''} {usdcBalance} USDC
               </Nav.Link>
-              {usdcBalance !== null && (
-                <Nav.Link href="#">
-                  {nativeBalance !== null ? `${nativeBalance} ${currencySymbol} | ` : ''} {usdcBalance} USDC
-                </Nav.Link>
-              )}
-              <DropdownButton
-                id="dropdown-basic-button"
-                title="Switch Network"
-                variant="outline-light"
-                className="ms-2"
-              >
-                {networkKeys.map((key) => (
-                  <Dropdown.Item key={key} onClick={() => switchNetwork(key)}>
-                    {PalketInfo.networks[key].name}
-                  </Dropdown.Item>
-                ))}
-              </DropdownButton>
-              <Button
-                variant="outline-light"
-                as={Link}
-                to={account ? `/user/${account}` : '#'}
-                className="ms-2"
-                disabled={!account}
-              >
-                My Profile
-              </Button>
-              <Button
-                variant="outline-light"
-                onClick={account ? changeAccount : connectWallet}
-                className="ms-2"
-              >
-                {account ? 'Change Account' : 'Connect Wallet'}
-              </Button>
-            </Nav>
-          </Container>
-        </Navbar>
-
-        <Container fluid className="mt-4"> {/* Changed to fluid */}
-          {message && (
-            <Alert variant={message.type} onClose={() => setMessage(null)} dismissible>
-              {message.text}
-            </Alert>
-          )}
-
-          {/* Create Offer Section */}
-          <h2>Create Offer</h2>
-          <Form>
-            <Form.Group controlId="offerType">
-              <Form.Label>Offer Type</Form.Label>
-              <Form.Control
-                as="select"
-                name="offerType"
-                value={formValues.offerType}
-                onChange={handleInputChange}
-              >
-                <option value="ReceiverInitiated">Create as Receiver</option>
-                <option value="SenderInitiated">Create as Sender</option>
-              </Form.Control>
-            </Form.Group>
-
-            <Form.Group controlId="productDescription">
-              <Form.Label>Product Description</Form.Label>
-              <Form.Control
-                type="text"
-                name="productDescription"
-                placeholder="Product Description"
-                value={formValues.productDescription}
-                onChange={handleInputChange}
-              />
-            </Form.Group>
-
-            {formValues.offerType === 'SenderInitiated' && (
-              <Form.Group controlId="productValue">
-                <Form.Label>Product Value (USDC)</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="productValue"
-                  placeholder="Product Value (USDC)"
-                  value={formValues.productValue}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                />
-              </Form.Group>
             )}
-
-            <Button variant="primary" onClick={createOffer} disabled={loading} className="mt-3">
-              {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
+            <DropdownButton
+              id="dropdown-basic-button"
+              title="Switch Network"
+              variant="outline-light"
+              className="ms-2"
+            >
+              {networkKeys.map((key) => (
+                <Dropdown.Item key={key} onClick={() => switchNetwork(key)}>
+                  {PalketInfo.networks[key].name}
+                </Dropdown.Item>
+              ))}
+            </DropdownButton>
+            {/* Removed 'My Profile' button as profiles are now in-page */}
+            <Button
+              variant="outline-light"
+              onClick={account ? changeAccount : connectWallet}
+              className="ms-2"
+            >
+              {account ? 'Change Account' : 'Connect Wallet'}
             </Button>
-          </Form>
-
-          {/* All Offers Section */}
-          <h2 className="mt-5">All Offers</h2>
-
-          <Form className="mb-4">
-            <Row>
-              <Col md={6} sm={12}>
-                <Form.Group controlId="filterType">
-                  <Form.Label>Filter by Offer Type</Form.Label>
-                  <Form.Control
-                    as="select"
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                  >
-                    <option value="All">All</option>
-                    <option value="ReceiverInitiated">Receiver Initiated</option>
-                    <option value="SenderInitiated">Sender Initiated</option>
-                  </Form.Control>
-                </Form.Group>
-              </Col>
-              <Col md={6} sm={12}>
-                <Form.Group controlId="filterState">
-                  <Form.Label>Filter by Offer State</Form.Label>
-                  <Form.Control
-                    as="select"
-                    value={filterState}
-                    onChange={(e) => setFilterState(e.target.value)}
-                  >
-                    <option value="All">All</option>
-                    <option value="Created">Created</option>
-                    <option value="Accepted">Accepted</option>
-                    <option value="Finalized">Finalized</option>
-                    <option value="Cancelled">Cancelled</option>
-                    <option value="Forfeited">Forfeited</option>
-                  </Form.Control>
-                </Form.Group>
-              </Col>
-            </Row>
-          </Form>
-
-          {allOffers.length > 0 ? (
-            <Row>
-              {allOffers
-                .filter((offer) => {
-                  if (filterType !== 'All') {
-                    const desiredType = filterType === 'ReceiverInitiated' ? 0 : 1;
-                    if (offer.offerType !== desiredType) return false;
-                  }
-
-                  if (filterState !== 'All') {
-                    const desiredState = getOfferStateValue(filterState);
-                    if (offer.state !== desiredState) return false;
-                  }
-
-                  return true;
-                })
-                .map((offer, index) => {
-                  const expirationTime = offer.acceptanceTime + 180 * 24 * 60 * 60;
-                  const currentTime = Math.floor(Date.now() / 1000);
-                  const expired = offer.state === 1 && currentTime >= expirationTime;
-
-                  return (
-                    <Col key={index} lg={10} md={10} sm={12} xs={12}> {/* Adjusted for better responsiveness */}
-                      <OfferCard
-                        offer={offer}
-                        usdcDecimals={usdcDecimals}
-                        account={account}
-                        loading={loading}
-                        cancelOffer={cancelOffer}
-                        finalizeOffer={finalizeOffer}
-                        forfeitOffer={forfeitOffer}
-                        averageScore={offer.averageScore}
-                        requestParticipationForOffer={requestParticipationForOffer}
-                        canChooseParticipantForOffer={canChooseParticipantForOffer}
-                        isExpired={expired}
-                        onChat={(address) => setCurrentChatAddress(address)}
-                      />
-                    </Col>
-                  );
-                })}
-            </Row>
-          ) : (
-            <p>No offers available.</p>
-          )}
-
-          <Button
-            variant="warning"
-            onClick={handleForfeitExpiredOffers}
-            disabled={loading}
-            className="mt-3"
-          >
-            {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Expired Offers'}
-          </Button>
-          {/* **Updated Alert Component** */}
-          <Alert variant="warning" className="mt-3">
-            <strong>Note:</strong> If an offer is forfeited:
-            <ul>
-              <li>10% goes to the caller</li>
-              <li>10% goes to the contract creator</li>
-              <li>80% goes to a random participant</li>
-            </ul>
-          </Alert>
+          </Nav>
         </Container>
+      </Navbar>
 
-        {/* Chat Component Integration */}
-        <Card className="mb-4">
-          <Card.Header>
-            <h4>Chat</h4>
-          </Card.Header>
-          <Card.Body style={{ padding: '0' }}>
-            {!xmtpClient ? (
-              // Fixed the onClick handler by mapping it to handleChatInitialization
-              <Button variant="primary" onClick={handleChatInitialization}>
-                Start Chat
-              </Button>
-            ) : (
-              <Chat xmtpClient={xmtpClient} targetAddress={currentChatAddress} />
-            )}
-          </Card.Body>
-        </Card>
+      <Container fluid className="mt-4"> {/* Changed to fluid */}
+        {message && (
+          <Alert variant={message.type} onClose={() => setMessage(null)} dismissible>
+            {message.text}
+          </Alert>
+        )}
 
-        {/* Description Modal */}
-        <Modal show={showDescriptionModal} onHide={() => setShowDescriptionModal(false)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Set Your Description</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form.Group controlId="userDescription">
-              <Form.Label>Description as Sender</Form.Label>
+        {/* === Offer Sections === */}
+        <Row>
+          {/* a) Buy Products/Services with Crypto */}
+          <Col lg={4} md={12} className="mb-4">
+            <Card>
+              <Card.Header>
+                <h5>Buy Products/Services with Crypto</h5>
+              </Card.Header>
+              <Card.Body>
+                {/* Option to create an offer as a receiver */}
+                <h6>Create Offer </h6>
+                <Form>
+                  <Form.Group controlId="productDescription">
+                    <Form.Label>Product Description</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="productDescription"
+                      placeholder="Product Description"
+                      value={formValues.productDescription}
+                      onChange={handleInputChange}
+                    />
+                  </Form.Group>
+
+                  <Button variant="primary" onClick={() => createOffer('ReceiverInitiated')} disabled={loading} className="mt-3">
+                    {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
+                  </Button>
+                </Form>
+
+                {/* List of offers created as Sender not yet accepted */}
+                <h6 className="mt-4">Your Active Purchase Offers</h6>
+                {allOffers.filter(offer => offer.offerType === 1 && offer.state === 0).length > 0 ? (
+                  <Row className="g-4">
+                    {allOffers
+                      .filter(offer => offer.offerType === 1 && offer.state === 0)
+                      .map((offer, index) => (
+                        <Col key={index} lg={12} md={12} sm={12}>
+                          <OfferCard
+                            offer={offer}
+                            usdcDecimals={usdcDecimals}
+                            account={account}
+                            loading={loading}
+                            cancelOffer={cancelOffer}
+                            finalizeOffer={finalizeOffer}
+                            forfeitOffer={forfeitOffer}
+                            averageScore={offer.averageScore}
+                            requestParticipationForOffer={requestParticipationForOffer}
+                            canChooseParticipantForOffer={canChooseParticipantForOffer}
+                            isExpired={false}
+                            onChat={onChat}
+                          />
+                        </Col>
+                      ))}
+                  </Row>
+                ) : (
+                  <p className="text-muted">No active purchase offers.</p>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+
+          {/* b) Sell Products/Services for Crypto */}
+          <Col lg={4} md={12} className="mb-4">
+            <Card>
+              <Card.Header>
+                <h5>Sell Products/Services for Crypto</h5>
+              </Card.Header>
+              <Card.Body>
+                {/* Option to create an offer as a sender */}
+                <h6>Create Offer as Seller</h6>
+                <Form>
+                  
+                  <Form.Group controlId="productDescription">
+                    <Form.Label>Product Description</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="productDescription"
+                      placeholder="Product Description"
+                      value={formValues.productDescription}
+                      onChange={handleInputChange}
+                    />
+                  </Form.Group>
+
+                  <Form.Group controlId="productValue">
+                    <Form.Label>Product Value (USDC)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      name="productValue"
+                      placeholder="Product Value (USDC)"
+                      value={formValues.productValue}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                    />
+                  </Form.Group>
+
+                  <Button variant="primary" onClick={() => createOffer('SenderInitiated')} disabled={loading} className="mt-3">
+                    {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
+                  </Button>
+                </Form>
+
+                {/* List of offers created as Receiver not yet accepted */}
+                <h6 className="mt-4">Your Active Sales Offers</h6>
+                {allOffers.filter(offer => offer.offerType === 0 && offer.state === 0).length > 0 ? (
+                  <Row className="g-4">
+                    {allOffers
+                      .filter(offer => offer.offerType === 0 && offer.state === 0)
+                      .map((offer, index) => (
+                        <Col key={index} lg={12} md={12} sm={12}>
+                          <OfferCard
+                            offer={offer}
+                            usdcDecimals={usdcDecimals}
+                            account={account}
+                            loading={loading}
+                            cancelOffer={cancelOffer}
+                            finalizeOffer={finalizeOffer}
+                            forfeitOffer={forfeitOffer}
+                            averageScore={offer.averageScore}
+                            requestParticipationForOffer={requestParticipationForOffer}
+                            canChooseParticipantForOffer={canChooseParticipantForOffer}
+                            isExpired={false}
+                            onChat={onChat}
+                          />
+                        </Col>
+                      ))}
+                  </Row>
+                ) : (
+                  <p className="text-muted">No active sales offers.</p>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+
+          {/* c) Lottery */}
+          <Col lg={4} md={12} className="mb-4">
+            <Card>
+              <Card.Header>
+                <h5>Lottery</h5>
+              </Card.Header>
+              <Card.Body>
+                {/* List of accepted and expired offers */}
+                <h6>Expired Accepted Offers</h6>
+                {allOffers.filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000)).length > 0 ? (
+                  <Row className="g-4">
+                    {allOffers
+                      .filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000))
+                      .map((offer, index) => (
+                        <Col key={index} lg={12} md={12} sm={12}>
+                          <OfferCard
+                            offer={offer}
+                            usdcDecimals={usdcDecimals}
+                            account={account}
+                            loading={loading}
+                            cancelOffer={cancelOffer}
+                            finalizeOffer={finalizeOffer}
+                            forfeitOffer={forfeitOffer}
+                            averageScore={offer.averageScore}
+                            requestParticipationForOffer={requestParticipationForOffer}
+                            canChooseParticipantForOffer={canChooseParticipantForOffer}
+                            isExpired={true}
+                            onChat={onChat}
+                          />
+                        </Col>
+                      ))}
+                  </Row>
+                ) : (
+                  <p className="text-muted">No expired accepted offers available for forfeiture.</p>
+                )}
+
+                {/* Button to proceed with forfeiture */}
+                <Button
+                  variant="warning"
+                  onClick={handleForfeitExpiredOffers}
+                  disabled={loading}
+                  className="mt-3"
+                >
+                  {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Expired Offers'}
+                </Button>
+                {/* **Updated Alert Component** */}
+                <Alert variant="warning" className="mt-3">
+                  <strong>Note:</strong> If an offer is forfeited:
+                  <ul>
+                    <li>10% goes to the caller</li>
+                    <li>10% goes to the contract creator</li>
+                    <li>80% goes to a random participant</li>
+                  </ul>
+                </Alert>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+        {/* === End of Offer Sections === */}
+
+        {/* === Lottery Section Button Removed as it's integrated above === */}
+      </Container>
+
+      {/* Chat Component Integration */}
+      <Card className="mb-4">
+        <Card.Header>
+          <h4>Chat</h4>
+        </Card.Header>
+        <Card.Body style={{ padding: '0' }}>
+          {!xmtpClient ? (
+            // Fixed the onClick handler by mapping it to handleChatInitialization
+            <Button variant="primary" onClick={handleChatInitialization}>
+              Start Chat
+            </Button>
+          ) : (
+            <Chat xmtpClient={xmtpClient} targetAddress={currentChatAddress} />
+          )}
+        </Card.Body>
+      </Card>
+
+      {/* Description Modal */}
+      <Modal show={showDescriptionModal} onHide={() => setShowDescriptionModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Set Your Description</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group controlId="userDescription">
+            <Form.Label>Description as Sender</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="Enter your description"
+              value={userDescription}
+              onChange={(e) => setUserDescription(e.target.value)}
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDescriptionModal(false)}>
+            Close
+          </Button>
+          <Button variant="primary" onClick={updateUserDescription} disabled={loading}>
+            {loading ? <Spinner animation="border" size="sm" /> : 'Save'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Request Participation Modal */}
+      {currentOfferForParticipation && (
+        <RequestParticipationModal
+          show={showRequestModal}
+          onHide={() => {
+            setShowRequestModal(false);
+            setCurrentOfferForParticipation(null);
+          }}
+          loading={loading}
+          requestParticipation={handleRequestParticipation}
+          offerType={currentOfferForParticipation.offerType}
+        />
+      )}
+
+      {/* Choose Participant Modal */}
+      {currentOfferForChoosing && (
+        <ChooseParticipantModal
+          show={showChooseModal}
+          onHide={() => {
+            setShowChooseModal(false);
+            setCurrentOfferForChoosing(null);
+            setParticipants([]);
+          }}
+          participants={participants}
+          chooseParticipant={chooseParticipant}
+          loading={loadingParticipants} // Pass loadingParticipants instead of global loading
+        />
+      )}
+
+      {/* Confirm Transaction Modal */}
+      <ConfirmTransactionModal
+        show={showConfirmModal}
+        onHide={handleConfirmCancel}
+        amount={confirmAmount}
+        onConfirm={handleConfirmProceed}
+        loading={loading}
+      />
+
+      {/* Encryption Key Modal for XMTP */}
+      <Modal show={showEncryptionModal} onHide={() => setShowEncryptionModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Initialize Chat</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {!generatedKey ? (
+            <>
+              <p>Do you have an existing encryption key?</p>
+              <Form.Label>Enter your encryption key (hex) if you have one:</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Enter your description"
-                value={userDescription}
-                onChange={(e) => setUserDescription(e.target.value)}
+                placeholder="Existing encryption key (hex)"
+                value={encryptionKeyInput}
+                onChange={(e) => setEncryptionKeyInput(e.target.value)}
               />
-            </Form.Group>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowDescriptionModal(false)}>
-              Close
-            </Button>
-            <Button variant="primary" onClick={updateUserDescription} disabled={loading}>
-              {loading ? <Spinner animation="border" size="sm" /> : 'Save'}
-            </Button>
-          </Modal.Footer>
-        </Modal>
-
-        {/* Request Participation Modal */}
-        {currentOfferForParticipation && (
-          <RequestParticipationModal
-            show={showRequestModal}
-            onHide={() => {
-              setShowRequestModal(false);
-              setCurrentOfferForParticipation(null);
-            }}
-            loading={loading}
-            requestParticipation={handleRequestParticipation}
-            offerType={currentOfferForParticipation.offerType}
-          />
-        )}
-
-        {/* Choose Participant Modal */}
-        {currentOfferForChoosing && (
-          <ChooseParticipantModal
-            show={showChooseModal}
-            onHide={() => {
-              setShowChooseModal(false);
-              setCurrentOfferForChoosing(null);
-              setParticipants([]);
-            }}
-            participants={participants}
-            chooseParticipant={chooseParticipant}
-            loading={loadingParticipants} // Pass loadingParticipants instead of global loading
-          />
-        )}
-
-        {/* Confirm Transaction Modal */}
-        <ConfirmTransactionModal
-          show={showConfirmModal}
-          onHide={handleConfirmCancel}
-          amount={confirmAmount}
-          onConfirm={handleConfirmProceed}
-          loading={loading}
-        />
-
-        {/* Encryption Key Modal for XMTP */}
-        <Modal show={showEncryptionModal} onHide={() => setShowEncryptionModal(false)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Initialize Chat</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            {!generatedKey ? (
-              <>
-                <p>Do you have an existing encryption key?</p>
-                <Form.Label>Enter your encryption key (hex) if you have one:</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Existing encryption key (hex)"
-                  value={encryptionKeyInput}
-                  onChange={(e) => setEncryptionKeyInput(e.target.value)}
-                />
-                <div className="mt-3">
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      if (!encryptionKeyInput) {
-                        alert('Please enter a key or choose to create a new one.');
-                        return;
-                      }
-                      initializeXmtp(encryptionKeyInput);
-                    }}
-                  >
-                    Use Existing Key
-                  </Button>{' '}
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      await generateRandomKey();
-                    }}
-                  >
-                    Create New Key
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <Alert variant="info">
-                  <strong>Your new encryption key:</strong>
-                  <br />
-                  {generatedKey}
-                </Alert>
-                <p>Please store this key in a safe place. If you lose it, you cannot recover your previous conversations.</p>
+              <div className="mt-3">
                 <Button
                   variant="primary"
                   onClick={() => {
-                    if (!generatedKey) {
-                      alert('Key not generated.');
+                    if (!encryptionKeyInput) {
+                      alert('Please enter a key or choose to create a new one.');
                       return;
                     }
-                    initializeXmtp(generatedKey);
+                    initializeXmtp(encryptionKeyInput);
                   }}
                 >
-                  Proceed with this new key
+                  Use Existing Key
+                </Button>{' '}
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    await generateRandomKey();
+                  }}
+                >
+                  Create New Key
                 </Button>
-              </>
-            )}
-          </Modal.Body>
-        </Modal>
+              </div>
+            </>
+          ) : (
+            <>
+              <Alert variant="info">
+                <strong>Your new encryption key:</strong>
+                <br />
+                {generatedKey}
+              </Alert>
+              <p>Please store this key in a safe place. If you lose it, you cannot recover your previous conversations.</p>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!generatedKey) {
+                    alert('Key not generated.');
+                    return;
+                  }
+                  initializeXmtp(generatedKey);
+                }}
+              >
+                Proceed with this new key
+              </Button>
+            </>
+          )}
+        </Modal.Body>
+      </Modal>
 
-        {/* Define Routes */}
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route
-            path="/user/:address"
-            element={
-              <UserInfo
-                marketplaceContract={marketplaceContract}
-                usdcDecimals={usdcDecimals}
-                account={account}
-                setShowDescriptionModal={setShowDescriptionModal}
-                xmtpClient={xmtpClient}
-                onInitiateChat={handleChatInitialization} // Pass handleChatInitialization as onInitiateChat
-              />
-            }
-          />
-        </Routes>
-      </div>
-    </Router>
+      {/* === User Profile Section (In-Page) === */}
+      {selectedProfileAddress && (
+        <UserProfile
+          marketplaceContract={marketplaceContract}
+          usdcDecimals={usdcDecimals}
+          account={account}
+          userAddress={selectedProfileAddress}
+          setShowDescriptionModal={setShowDescriptionModal}
+          onChat={onChat}
+        />
+      )}
+      {/* === End of User Profile Section === */}
+    </div>
   );
 }
 

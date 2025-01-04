@@ -12,7 +12,6 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -67,7 +66,8 @@ button:hover {
 }
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: none; /* Removed outline for clarity and fixed focus style */
+  box-shadow: 0 0 0 4px rgba(100, 102, 255, 0.4); /* Custom focus effect */
 }
 
 /* Light mode styles */
