@@ -15,6 +15,7 @@ import {
   Container,
   Navbar,
   Nav,
+  NavDropdown,
   Button,
   Form,
   Card,
@@ -27,6 +28,7 @@ import {
   Dropdown,
   DropdownButton,
   Tab,
+  Tabs,
 } from 'react-bootstrap';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -35,7 +37,7 @@ import { Link } from 'react-router-dom'; // Removed Router and Routes imports
 
 import Linkify from 'react-linkify';
 
-import { Client } from '@xmtp/browser-sdk';
+import { Client, ConsentEntityType, ConsentState  } from '@xmtp/browser-sdk';
 
 import { toBytes } from 'viem/utils';
 
@@ -47,19 +49,32 @@ import Chat from './Chat';
 const xmtpEnv = 'dev';
 
 // AddressLink Component
-const AddressLink = ({ address, onChat }) => {
+const AddressLink = ({ address, onChat, onSelectMenu, onSetProfileAddress }) => {
   if (!address || !ethersIsAddress(address)) {
     return <span className="text-muted">Unknown Address</span>;
   }
+
   return (
     <span>
       <span
         style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}
-        onClick={() => onChat(address)}
+        onClick={() => {
+          // Switch to Profile tab
+          onSelectMenu('Profile');
+          // Load that user’s address in the profile view
+          onSetProfileAddress(address);
+        }}
       >
         {address.substring(0, 6)}...{address.substring(address.length - 4)}
       </span>
-      <Button variant="link" size="sm" onClick={() => onChat(address)}>
+      <Button variant="link" size="sm" 
+        onClick={() => {
+          // Switch to Chat tab
+          onSelectMenu('Chat');
+          // Load that user’s chat
+          onChat(address);
+        }}
+      >
         Chat
       </Button>
     </span>
@@ -313,6 +328,8 @@ const OfferCard = ({
   canChooseParticipantForOffer,
   isExpired,
   onChat,
+  onSelectMenu,
+  onSetProfileAddress,
 }) => {
   const offerTypeText = offer.offerType === 0 ? 'PRODUCT REQUEST' : 'PRODUCT OFFER';
   const formattedCreationTime = new Date(offer.creationTime * 1000).toLocaleString();
@@ -346,10 +363,10 @@ const OfferCard = ({
           <strong>{parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)} USDC</strong>
         </Card.Text>
         <Card.Text>
-          Receiver: <AddressLink address={offer.receiver} onChat={onChat} />
+          Receiver: <AddressLink address={offer.receiver} onChat={onChat}  onSelectMenu={onSelectMenu} onSetProfileAddress={onSetProfileAddress}/>
         </Card.Text>
         <Card.Text>
-          Sender: <AddressLink address={offer.sender} onChat={onChat} /> <span>(Avg Score: {averageScore})</span>
+          Sender: <AddressLink address={offer.sender} onChat={onChat}  onSelectMenu={onSelectMenu}  onSetProfileAddress={onSetProfileAddress} /> <span>(Avg Score: {averageScore})</span>
         </Card.Text>
         <Card.Text>Created: {formattedCreationTime}</Card.Text>
         {offer.state !== 0 && offer.state !== 3 && <Card.Text>Accepted: {formattedAcceptanceTime}</Card.Text>}
@@ -433,6 +450,8 @@ const UserProfile = ({
   userAddress,
   setShowDescriptionModal,
   onChat,
+  onSelectMenu,
+  onSetProfileAddress,
 }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [userOffersAsSender, setUserOffersAsSender] = useState([]);
@@ -597,6 +616,8 @@ const UserProfile = ({
                             canChooseParticipantForOffer={() => {}}
                             isExpired={false}
                             onChat={onChat}
+                            onSelectMenu={onSelectMenu}
+                            onSetProfileAddress={onSetProfileAddress}
                           />
                         </Col>
                       ))}
@@ -636,6 +657,8 @@ const UserProfile = ({
                             canChooseParticipantForOffer={() => {}}
                             isExpired={false}
                             onChat={onChat}
+                            onSelectMenu={onSelectMenu}
+                            onSetProfileAddress={onSetProfileAddress}
                           />
                         </Col>
                       ))}
@@ -726,6 +749,8 @@ function App() {
   const [currentChatAddress, setCurrentChatAddress] = useState(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState(null); // New state for user profiles
 
+  const [selectedMenu, setSelectedMenu] = useState('Buy');
+
   useEffect(() => {
     initNetwork();
     if (window.ethereum) {
@@ -752,6 +777,12 @@ function App() {
     loadUsdcBalance();
     loadNativeBalance();
   }, [usdcContract, account, usdcDecimals, provider]);
+
+  useEffect(() => {
+    if (account) {
+      setSelectedProfileAddress(account);
+    }
+  }, [account]);
 
   const onChat = (address) => {
     setCurrentChatAddress(address);
@@ -921,6 +952,7 @@ function App() {
       await loadOffers(tempMarketplaceContract);
       await loadUserDescription();
       console.log('Wallet connected successfully.');
+      handleChatInitialization();
     } catch (error) {
       console.error('Error connecting wallet:', error);
       setMessage({
@@ -1318,6 +1350,15 @@ function App() {
           await approveTx.wait();
         }
 
+        // **Provide Consent to the Counterpart User**
+        await xmtpClient.setConsentStates([
+          {
+            entity: offer.offerType === 0 ? offer.receiver : offer.sender,
+            entityType: ConsentEntityType.Address,
+            state: ConsentState.allowed,
+          },
+        ]);
+
         const tx = await marketplaceContract.requestParticipation(
           offer.offerId,
           offer.offerType === 0 ? bidValue : 0 // pass the bidValue if ReceiverInitiated, or 0 for SenderInitiated
@@ -1409,6 +1450,15 @@ function App() {
             const approveTx = await usdcContract.approve(palketaddress, totalAmount);
             await approveTx.wait();
           }
+          
+          // **Provide Consent to the Counterpart User**
+          await xmtpClient.setConsentStates([
+            {
+              entity: participantAddress,
+              entityType: ConsentEntityType.Address,
+              state: ConsentState.Allowed,
+            },
+          ]);
 
           const tx = await marketplaceContract.chooseParticipant(offerId, participantAddress);
           await tx.wait();
@@ -1605,224 +1655,276 @@ function App() {
         </Container>
       </Navbar>
 
-      <Container fluid className="mt-4"> {/* Changed to fluid */}
+      <Container fluid className="mt-4">
         {message && (
           <Alert variant={message.type} onClose={() => setMessage(null)} dismissible>
             {message.text}
           </Alert>
         )}
 
-        {/* === Offer Sections === */}
-        <Row>
-          {/* a) Buy Products/Services with Crypto */}
-          <Col lg={4} md={12} className="mb-4">
-            <Card>
-              <Card.Header>
-                <h5>Buy Products/Services with Crypto</h5>
-              </Card.Header>
-              <Card.Body>
-                {/* Option to create an offer as a receiver */}
-                <h6>Create Offer </h6>
-                <Form>
-                  <Form.Group controlId="productDescription">
-                    <Form.Label>Product Description</Form.Label>
-                    <Form.Control
-                      type="text"
-                      name="productDescription"
-                      placeholder="Product Description"
-                      value={formValues.productDescription}
-                      onChange={handleInputChange}
-                    />
-                  </Form.Group>
+        {/* **Menu Navigation** */}
+        <Nav variant="tabs" activeKey={selectedMenu} onSelect={(selectedKey) => setSelectedMenu(selectedKey)} className="mb-4">
+          <Nav.Item>
+            <Nav.Link eventKey="Buy">Buy Products/Services with Crypto</Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="Sell">Sell Products/Services with Crypto</Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="Lottery">Lottery</Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="Chat">Chat</Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="Profile">Profile</Nav.Link>
+          </Nav.Item>
+        </Nav>
+        {/* **Conditional Rendering Based on Selected Menu** */}
+        {selectedMenu === 'Buy' && (
+          // **Buy Products/Services with Crypto Section**
+          <Row>
+            {/* a) Buy Products/Services with Crypto */}
+            <Col lg={4} md={12} className="mb-4">
+              <Card>
+                <Card.Header>
+                  <h5>Buy Products/Services with Crypto</h5>
+                </Card.Header>
+                <Card.Body>
+                  {/* Option to create an offer as a receiver */}
+                  <h6>Create Offer </h6>
+                  <Form>
+                    <Form.Group controlId="productDescription">
+                      <Form.Label>Product Description</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="productDescription"
+                        placeholder="Product Description"
+                        value={formValues.productDescription}
+                        onChange={handleInputChange}
+                      />
+                    </Form.Group>
 
-                  <Button variant="primary" onClick={() => createOffer('ReceiverInitiated')} disabled={loading} className="mt-3">
-                    {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
+                    <Button variant="primary" onClick={() => createOffer('ReceiverInitiated')} disabled={loading} className="mt-3">
+                      {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
+                    </Button>
+                  </Form>
+
+                  {/* List of offers created as Sender not yet accepted */}
+                  <h6 className="mt-4">Your Active Purchase Offers</h6>
+                  {allOffers.filter(offer => offer.offerType === 1 && offer.state === 0).length > 0 ? (
+                    <Row className="g-4">
+                      {allOffers
+                        .filter(offer => offer.offerType === 1 && offer.state === 0)
+                        .map((offer, index) => (
+                          <Col key={index} lg={12} md={12} sm={12}>
+                            <OfferCard
+                              offer={offer}
+                              usdcDecimals={usdcDecimals}
+                              account={account}
+                              loading={loading}
+                              cancelOffer={cancelOffer}
+                              finalizeOffer={finalizeOffer}
+                              forfeitOffer={forfeitOffer}
+                              averageScore={offer.averageScore}
+                              requestParticipationForOffer={requestParticipationForOffer}
+                              canChooseParticipantForOffer={canChooseParticipantForOffer}
+                              isExpired={false}
+                              onChat={onChat}
+                              onSelectMenu={setSelectedMenu}
+                              onSetProfileAddress={setSelectedProfileAddress}
+                            />
+                          </Col>
+                        ))}
+                    </Row>
+                  ) : (
+                    <p className="text-muted">No active purchase offers.</p>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+        )}
+
+        {selectedMenu === 'Sell' && (
+          // **Sell Products/Services with Crypto Section**
+          <Row>
+            {/* b) Sell Products/Services for Crypto */}
+            <Col lg={4} md={12} className="mb-4">
+              <Card>
+                <Card.Header>
+                  <h5>Sell Products/Services for Crypto</h5>
+                </Card.Header>
+                <Card.Body>
+                  {/* Option to create an offer as a sender */}
+                  <h6>Create Offer as Seller</h6>
+                  <Form>
+                    
+                    <Form.Group controlId="productDescription">
+                      <Form.Label>Product Description</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="productDescription"
+                        placeholder="Product Description"
+                        value={formValues.productDescription}
+                        onChange={handleInputChange}
+                      />
+                    </Form.Group>
+
+                    <Form.Group controlId="productValue">
+                      <Form.Label>Product Value (USDC)</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="productValue"
+                        placeholder="Product Value (USDC)"
+                        value={formValues.productValue}
+                        onChange={handleInputChange}
+                        min="0"
+                        step="0.01"
+                      />
+                    </Form.Group>
+
+                    <Button variant="primary" onClick={() => createOffer('SenderInitiated')} disabled={loading} className="mt-3">
+                      {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
+                    </Button>
+                  </Form>
+
+                  {/* List of offers created as Receiver not yet accepted */}
+                  <h6 className="mt-4">Your Active Sales Offers</h6>
+                  {allOffers.filter(offer => offer.offerType === 0 && offer.state === 0).length > 0 ? (
+                    <Row className="g-4">
+                      {allOffers
+                        .filter(offer => offer.offerType === 0 && offer.state === 0)
+                        .map((offer, index) => (
+                          <Col key={index} lg={12} md={12} sm={12}>
+                            <OfferCard
+                              offer={offer}
+                              usdcDecimals={usdcDecimals}
+                              account={account}
+                              loading={loading}
+                              cancelOffer={cancelOffer}
+                              finalizeOffer={finalizeOffer}
+                              forfeitOffer={forfeitOffer}
+                              averageScore={offer.averageScore}
+                              requestParticipationForOffer={requestParticipationForOffer}
+                              canChooseParticipantForOffer={canChooseParticipantForOffer}
+                              isExpired={false}
+                              onChat={onChat}
+                              onSelectMenu={setSelectedMenu}
+                              onSetProfileAddress={setSelectedProfileAddress}
+                            />
+                          </Col>
+                        ))}
+                    </Row>
+                  ) : (
+                    <p className="text-muted">No active sales offers.</p>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+        )}
+
+        {selectedMenu === 'Lottery' && (
+          // **Lottery Section**
+          <Row>
+            {/* c) Lottery */}
+            <Col lg={4} md={12} className="mb-4">
+              <Card>
+                <Card.Header>
+                  <h5>Lottery</h5>
+                </Card.Header>
+                <Card.Body>
+                  {/* List of accepted and expired offers */}
+                  <h6>Expired Accepted Offers</h6>
+                  {allOffers.filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000)).length > 0 ? (
+                    <Row className="g-4">
+                      {allOffers
+                        .filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000))
+                        .map((offer, index) => (
+                          <Col key={index} lg={12} md={12} sm={12}>
+                            <OfferCard
+                              offer={offer}
+                              usdcDecimals={usdcDecimals}
+                              account={account}
+                              loading={loading}
+                              cancelOffer={cancelOffer}
+                              finalizeOffer={finalizeOffer}
+                              forfeitOffer={forfeitOffer}
+                              averageScore={offer.averageScore}
+                              requestParticipationForOffer={requestParticipationForOffer}
+                              canChooseParticipantForOffer={canChooseParticipantForOffer}
+                              isExpired={true}
+                              onChat={onChat}
+                              onSelectMenu={setSelectedMenu}
+                              onSetProfileAddress={setSelectedProfileAddress}
+                            />
+                          </Col>
+                        ))}
+                    </Row>
+                  ) : (
+                    <p className="text-muted">No expired accepted offers available for forfeiture.</p>
+                  )}
+
+                  {/* Button to proceed with forfeiture */}
+                  <Button
+                    variant="warning"
+                    onClick={handleForfeitExpiredOffers}
+                    disabled={loading}
+                    className="mt-3"
+                  >
+                    {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Expired Offers'}
                   </Button>
-                </Form>
+                  {/* **Updated Alert Component** */}
+                  <Alert variant="warning" className="mt-3">
+                    <strong>Note:</strong> If an offer is forfeited:
+                    <ul>
+                      <li>10% goes to the caller</li>
+                      <li>10% goes to the contract creator</li>
+                      <li>80% goes to a random participant</li>
+                    </ul>
+                  </Alert>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+        )}
 
-                {/* List of offers created as Sender not yet accepted */}
-                <h6 className="mt-4">Your Active Purchase Offers</h6>
-                {allOffers.filter(offer => offer.offerType === 1 && offer.state === 0).length > 0 ? (
-                  <Row className="g-4">
-                    {allOffers
-                      .filter(offer => offer.offerType === 1 && offer.state === 0)
-                      .map((offer, index) => (
-                        <Col key={index} lg={12} md={12} sm={12}>
-                          <OfferCard
-                            offer={offer}
-                            usdcDecimals={usdcDecimals}
-                            account={account}
-                            loading={loading}
-                            cancelOffer={cancelOffer}
-                            finalizeOffer={finalizeOffer}
-                            forfeitOffer={forfeitOffer}
-                            averageScore={offer.averageScore}
-                            requestParticipationForOffer={requestParticipationForOffer}
-                            canChooseParticipantForOffer={canChooseParticipantForOffer}
-                            isExpired={false}
-                            onChat={onChat}
-                          />
-                        </Col>
-                      ))}
-                  </Row>
-                ) : (
-                  <p className="text-muted">No active purchase offers.</p>
-                )}
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* b) Sell Products/Services for Crypto */}
-          <Col lg={4} md={12} className="mb-4">
-            <Card>
-              <Card.Header>
-                <h5>Sell Products/Services for Crypto</h5>
-              </Card.Header>
-              <Card.Body>
-                {/* Option to create an offer as a sender */}
-                <h6>Create Offer as Seller</h6>
-                <Form>
-                  
-                  <Form.Group controlId="productDescription">
-                    <Form.Label>Product Description</Form.Label>
-                    <Form.Control
-                      type="text"
-                      name="productDescription"
-                      placeholder="Product Description"
-                      value={formValues.productDescription}
-                      onChange={handleInputChange}
-                    />
-                  </Form.Group>
-
-                  <Form.Group controlId="productValue">
-                    <Form.Label>Product Value (USDC)</Form.Label>
-                    <Form.Control
-                      type="number"
-                      name="productValue"
-                      placeholder="Product Value (USDC)"
-                      value={formValues.productValue}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                    />
-                  </Form.Group>
-
-                  <Button variant="primary" onClick={() => createOffer('SenderInitiated')} disabled={loading} className="mt-3">
-                    {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
-                  </Button>
-                </Form>
-
-                {/* List of offers created as Receiver not yet accepted */}
-                <h6 className="mt-4">Your Active Sales Offers</h6>
-                {allOffers.filter(offer => offer.offerType === 0 && offer.state === 0).length > 0 ? (
-                  <Row className="g-4">
-                    {allOffers
-                      .filter(offer => offer.offerType === 0 && offer.state === 0)
-                      .map((offer, index) => (
-                        <Col key={index} lg={12} md={12} sm={12}>
-                          <OfferCard
-                            offer={offer}
-                            usdcDecimals={usdcDecimals}
-                            account={account}
-                            loading={loading}
-                            cancelOffer={cancelOffer}
-                            finalizeOffer={finalizeOffer}
-                            forfeitOffer={forfeitOffer}
-                            averageScore={offer.averageScore}
-                            requestParticipationForOffer={requestParticipationForOffer}
-                            canChooseParticipantForOffer={canChooseParticipantForOffer}
-                            isExpired={false}
-                            onChat={onChat}
-                          />
-                        </Col>
-                      ))}
-                  </Row>
-                ) : (
-                  <p className="text-muted">No active sales offers.</p>
-                )}
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* c) Lottery */}
-          <Col lg={4} md={12} className="mb-4">
-            <Card>
-              <Card.Header>
-                <h5>Lottery</h5>
-              </Card.Header>
-              <Card.Body>
-                {/* List of accepted and expired offers */}
-                <h6>Expired Accepted Offers</h6>
-                {allOffers.filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000)).length > 0 ? (
-                  <Row className="g-4">
-                    {allOffers
-                      .filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000))
-                      .map((offer, index) => (
-                        <Col key={index} lg={12} md={12} sm={12}>
-                          <OfferCard
-                            offer={offer}
-                            usdcDecimals={usdcDecimals}
-                            account={account}
-                            loading={loading}
-                            cancelOffer={cancelOffer}
-                            finalizeOffer={finalizeOffer}
-                            forfeitOffer={forfeitOffer}
-                            averageScore={offer.averageScore}
-                            requestParticipationForOffer={requestParticipationForOffer}
-                            canChooseParticipantForOffer={canChooseParticipantForOffer}
-                            isExpired={true}
-                            onChat={onChat}
-                          />
-                        </Col>
-                      ))}
-                  </Row>
-                ) : (
-                  <p className="text-muted">No expired accepted offers available for forfeiture.</p>
-                )}
-
-                {/* Button to proceed with forfeiture */}
-                <Button
-                  variant="warning"
-                  onClick={handleForfeitExpiredOffers}
-                  disabled={loading}
-                  className="mt-3"
-                >
-                  {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Expired Offers'}
+        {selectedMenu === 'Chat' && (
+          // **Chat Section**
+          <Card className="mb-4">
+            <Card.Header>
+              <h4>Chat</h4>
+            </Card.Header>
+            <Card.Body style={{ padding: '0' }}>
+              {!xmtpClient ? (
+                // Fixed the onClick handler by mapping it to handleChatInitialization
+                <Button variant="primary" onClick={handleChatInitialization}>
+                  Start Chat
                 </Button>
-                {/* **Updated Alert Component** */}
-                <Alert variant="warning" className="mt-3">
-                  <strong>Note:</strong> If an offer is forfeited:
-                  <ul>
-                    <li>10% goes to the caller</li>
-                    <li>10% goes to the contract creator</li>
-                    <li>80% goes to a random participant</li>
-                  </ul>
-                </Alert>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-        {/* === End of Offer Sections === */}
+              ) : (
+                <Chat xmtpClient={xmtpClient} targetAddress={currentChatAddress} />
+              )}
+            </Card.Body>
+          </Card>
+        )}
 
-        {/* === Lottery Section Button Removed as it's integrated above === */}
+        {selectedMenu === 'Profile' && (
+          // **Profile Section**
+          <UserProfile
+            marketplaceContract={marketplaceContract}
+            usdcDecimals={usdcDecimals}
+            account={account}
+            userAddress={selectedProfileAddress}
+            setShowDescriptionModal={setShowDescriptionModal}
+            onChat={onChat}
+            onSelectMenu={setSelectedMenu}
+            onSetProfileAddress={setSelectedProfileAddress}
+          />
+
+        )}
+
       </Container>
-
-      {/* Chat Component Integration */}
-      <Card className="mb-4">
-        <Card.Header>
-          <h4>Chat</h4>
-        </Card.Header>
-        <Card.Body style={{ padding: '0' }}>
-          {!xmtpClient ? (
-            // Fixed the onClick handler by mapping it to handleChatInitialization
-            <Button variant="primary" onClick={handleChatInitialization}>
-              Start Chat
-            </Button>
-          ) : (
-            <Chat xmtpClient={xmtpClient} targetAddress={currentChatAddress} />
-          )}
-        </Card.Body>
-      </Card>
 
       {/* Description Modal */}
       <Modal show={showDescriptionModal} onHide={() => setShowDescriptionModal(false)}>
@@ -1952,18 +2054,7 @@ function App() {
         </Modal.Body>
       </Modal>
 
-      {/* === User Profile Section (In-Page) === */}
-      {selectedProfileAddress && (
-        <UserProfile
-          marketplaceContract={marketplaceContract}
-          usdcDecimals={usdcDecimals}
-          account={account}
-          userAddress={selectedProfileAddress}
-          setShowDescriptionModal={setShowDescriptionModal}
-          onChat={onChat}
-        />
-      )}
-      {/* === End of User Profile Section === */}
+      
     </div>
   );
 }
