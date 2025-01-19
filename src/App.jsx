@@ -33,22 +33,25 @@ import {
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-import { Link } from 'react-router-dom'; // Removed Router and Routes imports
+import palketLogo from './assets/palket.png';
 
 import Linkify from 'react-linkify';
 
-import { Client, ConsentEntityType, ConsentState  } from '@xmtp/browser-sdk';
+import { Client, ConsentEntityType, ConsentState } from '@xmtp/browser-sdk';
 
 import { toBytes } from 'viem/utils';
 
 import Chat from './Chat';
 
-// Removed React Router components
-// import { BrowserRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
+// Removed React Router usage to simplify
 
 const xmtpEnv = 'dev';
 
-// AddressLink Component
+/** =====================
+ *    Helper Components
+ ======================*/
+
+// AddressLink
 const AddressLink = ({ address, onChat, onSelectMenu, onSetProfileAddress }) => {
   if (!address || !ethersIsAddress(address)) {
     return <span className="text-muted">Unknown Address</span>;
@@ -61,13 +64,15 @@ const AddressLink = ({ address, onChat, onSelectMenu, onSetProfileAddress }) => 
         onClick={() => {
           // Switch to Profile tab
           onSelectMenu('Profile');
-          // Load that user’s address in the profile view
+          // Load that user’s address in the Profile view
           onSetProfileAddress(address);
         }}
       >
         {address.substring(0, 6)}...{address.substring(address.length - 4)}
       </span>
-      <Button variant="link" size="sm" 
+      <Button
+        variant="link"
+        size="sm"
         onClick={() => {
           // Switch to Chat tab
           onSelectMenu('Chat');
@@ -81,11 +86,10 @@ const AddressLink = ({ address, onChat, onSelectMenu, onSetProfileAddress }) => 
   );
 };
 
-// Function to render star rating
+// Star rating
 const renderStarRating = (score) => {
   const totalStars = 5;
   const filledStars = score;
-
   const stars = [];
   for (let i = 1; i <= totalStars; i++) {
     stars.push(
@@ -94,10 +98,10 @@ const renderStarRating = (score) => {
       </span>
     );
   }
-
   return <span>{stars}</span>;
 };
 
+// Linkify options
 const linkifyOptions = {
   target: '_blank',
   rel: 'noopener noreferrer',
@@ -108,7 +112,14 @@ const linkifyOptions = {
   ),
 };
 
-const ChooseParticipantModal = ({ show, onHide, participants, chooseParticipant, loading }) => {
+// Modal: ChooseParticipant
+const ChooseParticipantModal = ({
+  show,
+  onHide,
+  participants,
+  chooseParticipant,
+  loading,
+}) => {
   const [selectedParticipant, setSelectedParticipant] = useState(null);
 
   const handleChoose = () => {
@@ -155,7 +166,7 @@ const ChooseParticipantModal = ({ show, onHide, participants, chooseParticipant,
   );
 };
 
-// Component for Finalize Offer Modal
+// Modal: FinalizeOffer
 const FinalizeOfferModal = ({ offerId, finalizeOffer, loading }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedScore, setSelectedScore] = useState(5);
@@ -209,7 +220,7 @@ const FinalizeOfferModal = ({ offerId, finalizeOffer, loading }) => {
   );
 };
 
-// Helper functions to get offer state and badge variants
+// Helper functions: offer state
 function getOfferState(state) {
   switch (state) {
     case 0:
@@ -244,7 +255,14 @@ function getBadgeVariant(state) {
   }
 }
 
-const RequestParticipationModal = ({ show, onHide, loading, requestParticipation, offerType }) => {
+// Modal: RequestParticipation
+const RequestParticipationModal = ({
+  show,
+  onHide,
+  loading,
+  requestParticipation,
+  offerType,
+}) => {
   const [bidValue, setBidValue] = useState('');
 
   const handleRequest = () => {
@@ -280,7 +298,10 @@ const RequestParticipationModal = ({ show, onHide, loading, requestParticipation
         <Button
           variant="primary"
           onClick={handleRequest}
-          disabled={loading || (offerType === 0 && (!bidValue || parseFloat(bidValue) <= 0))}
+          disabled={
+            loading ||
+            (offerType === 0 && (!bidValue || parseFloat(bidValue) <= 0))
+          }
         >
           {loading ? <Spinner animation="border" size="sm" /> : 'Request'}
         </Button>
@@ -289,8 +310,14 @@ const RequestParticipationModal = ({ show, onHide, loading, requestParticipation
   );
 };
 
-// ConfirmTransactionModal: A generic modal to confirm a USDC transfer
-const ConfirmTransactionModal = ({ show, onHide, amount, onConfirm, loading }) => {
+// Modal: ConfirmTransaction
+const ConfirmTransactionModal = ({
+  show,
+  onHide,
+  amount,
+  onConfirm,
+  loading,
+}) => {
   return (
     <Modal show={show} onHide={onHide}>
       <Modal.Header closeButton>
@@ -298,7 +325,8 @@ const ConfirmTransactionModal = ({ show, onHide, amount, onConfirm, loading }) =
       </Modal.Header>
       <Modal.Body>
         <p>
-          You are about to transfer <strong>{amount}</strong> USDC. Are you sure you want to proceed?
+          You are about to transfer <strong>{amount}</strong> USDC. Are you sure
+          you want to proceed?
         </p>
       </Modal.Body>
       <Modal.Footer>
@@ -313,7 +341,7 @@ const ConfirmTransactionModal = ({ show, onHide, amount, onConfirm, loading }) =
   );
 };
 
-// OfferCard Component
+// OfferCard
 const OfferCard = ({
   offer,
   usdcDecimals,
@@ -351,51 +379,89 @@ const OfferCard = ({
       <Card.Body>
         <div className="d-flex justify-content-between align-items-center">
           <Card.Title>Offer {offer.offerId}</Card.Title>
-          {offer.state === 2 && <Badge bg="secondary">{renderStarRating(offer.senderScore)}</Badge>}
-          {offer.state === 0 && offer.offerType === 0 && <Badge bg="primary"> {offerTypeText} </Badge>}
-          {offer.state === 0 && offer.offerType === 1 && <Badge bg="secondary"> {offerTypeText} </Badge>}
-          <Badge bg={getBadgeVariant(offer.state)}>{getOfferState(offer.state)}</Badge>
+          {offer.state === 2 && (
+            <Badge bg="secondary">{renderStarRating(offer.senderScore)}</Badge>
+          )}
+          {offer.state === 0 && offer.offerType === 0 && (
+            <Badge bg="primary"> {offerTypeText} </Badge>
+          )}
+          {offer.state === 0 && offer.offerType === 1 && (
+            <Badge bg="secondary"> {offerTypeText} </Badge>
+          )}
+          <Badge bg={getBadgeVariant(offer.state)}>
+            {getOfferState(offer.state)}
+          </Badge>
         </div>
         <Card.Text>
           <Linkify options={linkifyOptions}>{offer.productDescription}</Linkify>
         </Card.Text>
         <Card.Text>
-          <strong>{parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)} USDC</strong>
+          <strong>
+            {parseFloat(formatUnits(offer.productValue, usdcDecimals)).toFixed(2)}{' '}
+            USDC
+          </strong>
         </Card.Text>
         <Card.Text>
-          Receiver: <AddressLink address={offer.receiver} onChat={onChat}  onSelectMenu={onSelectMenu} onSetProfileAddress={onSetProfileAddress}/>
+          Receiver:{' '}
+          <AddressLink
+            address={offer.receiver}
+            onChat={onChat}
+            onSelectMenu={onSelectMenu}
+            onSetProfileAddress={onSetProfileAddress}
+          />
         </Card.Text>
         <Card.Text>
-          Sender: <AddressLink address={offer.sender} onChat={onChat}  onSelectMenu={onSelectMenu}  onSetProfileAddress={onSetProfileAddress} /> <span>(Avg Score: {averageScore})</span>
+          Sender:{' '}
+          <AddressLink
+            address={offer.sender}
+            onChat={onChat}
+            onSelectMenu={onSelectMenu}
+            onSetProfileAddress={onSetProfileAddress}
+          />{' '}
+          <span>(Avg Score: {averageScore})</span>
         </Card.Text>
         <Card.Text>Created: {formattedCreationTime}</Card.Text>
-        {offer.state !== 0 && offer.state !== 3 && <Card.Text>Accepted: {formattedAcceptanceTime}</Card.Text>}
+        {offer.state !== 0 && offer.state !== 3 && (
+          <Card.Text>Accepted: {formattedAcceptanceTime}</Card.Text>
+        )}
 
         {!hideActions && (
           <>
             {offer.state === 0 &&
-              ((offer.offerType === 0 && offer.receiver.toLowerCase() !== account.toLowerCase()) ||
-                (offer.offerType === 1 && offer.sender.toLowerCase() !== account.toLowerCase())) && (
+              ((offer.offerType === 0 &&
+                offer.receiver.toLowerCase() !== account.toLowerCase()) ||
+                (offer.offerType === 1 &&
+                  offer.sender.toLowerCase() !== account.toLowerCase())) && (
                 <Button
                   variant="success"
                   onClick={() => requestParticipationForOffer(offer)}
                   disabled={loading}
                   className="mr-2 mt-2"
                 >
-                  {loading ? <Spinner animation="border" size="sm" /> : 'Request Participation'}
+                  {loading ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : (
+                    'Request Participation'
+                  )}
                 </Button>
               )}
 
             {offer.state === 0 &&
-              ((offer.offerType === 0 && offer.receiver.toLowerCase() === account.toLowerCase()) ||
-                (offer.offerType === 1 && offer.sender.toLowerCase() === account.toLowerCase())) && (
+              ((offer.offerType === 0 &&
+                offer.receiver.toLowerCase() === account.toLowerCase()) ||
+                (offer.offerType === 1 &&
+                  offer.sender.toLowerCase() === account.toLowerCase())) && (
                 <Button
                   variant="primary"
                   onClick={() => canChooseParticipantForOffer(offer)}
                   disabled={loading}
                   className="mr-2 mt-2"
                 >
-                  {loading ? <Spinner animation="border" size="sm" /> : 'Choose Participant'}
+                  {loading ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : (
+                    'Choose Participant'
+                  )}
                 </Button>
               )}
 
@@ -406,17 +472,22 @@ const OfferCard = ({
                 disabled={loading}
                 className="mr-2 mt-2"
               >
-                {loading ? <Spinner animation="border" size="sm" /> : 'Cancel Offer'}
+                {loading ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  'Cancel Offer'
+                )}
               </Button>
             )}
 
-            {offer.state === 1 && offer.receiver.toLowerCase() === account.toLowerCase() && (
-              <FinalizeOfferModal
-                offerId={offer.offerId}
-                finalizeOffer={finalizeOffer}
-                loading={loading}
-              />
-            )}
+            {offer.state === 1 &&
+              offer.receiver.toLowerCase() === account.toLowerCase() && (
+                <FinalizeOfferModal
+                  offerId={offer.offerId}
+                  finalizeOffer={finalizeOffer}
+                  loading={loading}
+                />
+              )}
 
             {isExpired && (
               <Button
@@ -432,17 +503,10 @@ const OfferCard = ({
         )}
       </Card.Body>
     </Card>
-
   );
-
 };
 
-// Home Component
-const Home = () => {
-  return null;
-};
-
-// UserProfile Component (New)
+// UserProfile (New)
 const UserProfile = ({
   marketplaceContract,
   usdcDecimals,
@@ -473,7 +537,9 @@ const UserProfile = ({
       const totalScore = Number(profile.totalScoreAsSender);
       const numFinalizedAsSender = Number(profile.numOffersFinalizedAsSender);
       const averageScoreAsSender =
-        numFinalizedAsSender > 0 ? parseFloat(totalScore / numFinalizedAsSender).toFixed(2) : 'N/A';
+        numFinalizedAsSender > 0
+          ? parseFloat(totalScore / numFinalizedAsSender).toFixed(2)
+          : 'N/A';
 
       setUserProfile({
         descriptionAsSender: profile.descriptionAsSender,
@@ -481,7 +547,9 @@ const UserProfile = ({
         numOffersAcceptedAsSender: Number(profile.numOffersAcceptedAsSender),
         numOffersFinalizedAsSender: numFinalizedAsSender,
         numOffersAcceptedAsReceiver: Number(profile.numOffersAcceptedAsReceiver),
-        numOffersFinalizedAsReceiver: Number(profile.numOffersFinalizedAsReceiver),
+        numOffersFinalizedAsReceiver: Number(
+          profile.numOffersFinalizedAsReceiver
+        ),
       });
     } catch (error) {
       console.error('Error fetching user info:', error);
@@ -568,23 +636,29 @@ const UserProfile = ({
                   <Card className="mb-4">
                     <Card.Body>
                       <Card.Text>
-                        <strong>Description:</strong> {userProfile.descriptionAsSender || 'No description provided.'}
+                        <strong>Description:</strong>{' '}
+                        {userProfile.descriptionAsSender || 'No description provided.'}
                       </Card.Text>
                       <Card.Text>
                         <strong>Average Score:</strong>{' '}
                         {userProfile.averageScoreAsSender !== 'N/A' ? (
                           <>
-                            {renderStarRating(parseFloat(userProfile.averageScoreAsSender))} ({userProfile.averageScoreAsSender})
+                            {renderStarRating(
+                              parseFloat(userProfile.averageScoreAsSender)
+                            )}{' '}
+                            ({userProfile.averageScoreAsSender})
                           </>
                         ) : (
                           'N/A'
                         )}
                       </Card.Text>
                       <Card.Text>
-                        <strong>Offers Accepted:</strong> {userProfile.numOffersAcceptedAsSender}
+                        <strong>Offers Accepted:</strong>{' '}
+                        {userProfile.numOffersAcceptedAsSender}
                       </Card.Text>
                       <Card.Text>
-                        <strong>Offers Finalized:</strong> {userProfile.numOffersFinalizedAsSender}
+                        <strong>Offers Finalized:</strong>{' '}
+                        {userProfile.numOffersFinalizedAsSender}
                       </Card.Text>
                       {userAddress.toLowerCase() === account.toLowerCase() && (
                         <Button
@@ -631,10 +705,12 @@ const UserProfile = ({
                   <Card className="mb-4">
                     <Card.Body>
                       <Card.Text>
-                        <strong>Offers Accepted:</strong> {userProfile.numOffersAcceptedAsReceiver}
+                        <strong>Offers Accepted:</strong>{' '}
+                        {userProfile.numOffersAcceptedAsReceiver}
                       </Card.Text>
                       <Card.Text>
-                        <strong>Offers Finalized:</strong> {userProfile.numOffersFinalizedAsReceiver}
+                        <strong>Offers Finalized:</strong>{' '}
+                        {userProfile.numOffersFinalizedAsReceiver}
                       </Card.Text>
                     </Card.Body>
                   </Card>
@@ -676,11 +752,13 @@ const UserProfile = ({
       )}
     </Container>
   );
-
-  // Removed UserInfo component as it's now handled within the same page
 };
 
+/** ======================
+ *        Main App
+ =======================*/
 function App() {
+  // -- States
   const [networkEnv, setNetworkEnv] = useState('sepolia');
   const networkKeys = Object.keys(PalketInfo.networks);
   const {
@@ -726,7 +804,8 @@ function App() {
 
   const [xmtpClient, setXmtpClient] = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [currentOfferForParticipation, setCurrentOfferForParticipation] = useState(null);
+  const [currentOfferForParticipation, setCurrentOfferForParticipation] =
+    useState(null);
 
   const [showChooseModal, setShowChooseModal] = useState(false);
   const [currentOfferForChoosing, setCurrentOfferForChoosing] = useState(null);
@@ -736,21 +815,22 @@ function App() {
   const [encryptionKeyInput, setEncryptionKeyInput] = useState('');
   const [generatedKey, setGeneratedKey] = useState('');
 
-  // State for ConfirmTransactionModal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAmount, setConfirmAmount] = useState('');
   const [confirmCallback, setConfirmCallback] = useState(null);
 
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
-
-  // Added loadingParticipants state
   const [loadingParticipants, setLoadingParticipants] = useState(false);
 
+  // Track the address we want to chat with
   const [currentChatAddress, setCurrentChatAddress] = useState(null);
-  const [selectedProfileAddress, setSelectedProfileAddress] = useState(null); // New state for user profiles
+  // Track which profile to show
+  const [selectedProfileAddress, setSelectedProfileAddress] = useState(null);
 
-  const [selectedMenu, setSelectedMenu] = useState('Buy');
+  // The main navigation selection
+  const [selectedMenu, setSelectedMenu] = useState('Home');
 
+  // Effects
   useEffect(() => {
     initNetwork();
     if (window.ethereum) {
@@ -784,6 +864,7 @@ function App() {
     }
   }, [account]);
 
+  // Handlers
   const onChat = (address) => {
     setCurrentChatAddress(address);
     handleChatInitialization();
@@ -793,8 +874,8 @@ function App() {
     try {
       const dp = await marketplaceContract.depositPercentage();
       const ff = await marketplaceContract.finalizeFeePercentage();
-      setDepositPercentage(Number(dp)); // e.g., 50
-      setFinalizeFeePercentage(Number(ff)); // e.g., 1
+      setDepositPercentage(Number(dp));
+      setFinalizeFeePercentage(Number(ff));
     } catch (error) {
       console.error('Error fetching contract params:', error);
       setMessage({
@@ -815,9 +896,7 @@ function App() {
   };
 
   const handleChainChanged = () => {
-    console.log('Chain changed detected. Reload application.');
-    // Optionally, you can reload the page or handle it gracefully
-    // window.location.reload();
+    console.log('Chain changed. Reload or handle as needed.');
   };
 
   const switchNetworkIfNeeded = async () => {
@@ -840,27 +919,20 @@ function App() {
 
     try {
       const chainIdCurrent = await window.ethereum.request({ method: 'eth_chainId' });
-      console.log(`Current chainId: ${chainIdCurrent}`);
-      console.log(`Desired chainId: ${chainId}`);
-
       if (chainIdCurrent.toLowerCase() === chainId.toLowerCase()) {
-        console.log('Already on the desired network.');
+        // Already on correct network
         setIsSwitchingNetwork(false);
         return;
       }
-
-      console.log(`Attempting to switch to chainId: ${chainId}`);
+      // Attempt switch
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId }],
       });
-      console.log('Successfully switched network.');
     } catch (switchError) {
       console.error('Error switching network:', switchError);
-
       if (switchError.code === 4902) {
-        // Chain not added to MetaMask
-        console.log('Network not found in MetaMask. Attempting to add it.');
+        // Add chain to MetaMask
         const params = {
           chainId,
           chainName: networkName,
@@ -879,7 +951,6 @@ function App() {
             method: 'wallet_addEthereumChain',
             params: [params],
           });
-          console.log('Network added successfully.');
         } catch (addError) {
           console.error('Error adding network:', addError);
           setMessage({
@@ -888,7 +959,6 @@ function App() {
           });
         }
       } else {
-        // Handle other errors
         setMessage({
           type: 'danger',
           text: `Error switching network: ${switchError.message || switchError}`,
@@ -899,8 +969,6 @@ function App() {
     }
   };
 
-  // This runs automatically when networkEnv changes (e.g., user chooses from dropdown).
-  // We also call it the first time on mount.
   const initNetwork = async () => {
     await switchNetworkIfNeeded();
   };
@@ -913,23 +981,18 @@ function App() {
         setLoading(false);
         return;
       }
-
-      console.log('Attempting to switch network if needed before connecting.');
+      // Attempt network switch
       await switchNetworkIfNeeded();
 
-      console.log('Requesting account access.');
+      // Request account
       await window.ethereum.request({ method: 'eth_requestAccounts' });
-
       const tempProvider = new BrowserProvider(window.ethereum);
       const tempSigner = await tempProvider.getSigner();
       const tempAccount = await tempSigner.getAddress();
-      console.log(`Connected account: ${tempAccount}`);
 
-      // Double-check chain after user connected
+      // Double-check chain
       const chainIdCurrent = await window.ethereum.request({ method: 'eth_chainId' });
-      console.log(`ChainId after connection: ${chainIdCurrent}`);
       if (chainIdCurrent.toLowerCase() !== chainId.toLowerCase()) {
-        // If still not on correct chain, show an error
         setMessage({
           type: 'warning',
           text: `You must switch to ${networkName} to proceed.`,
@@ -948,10 +1011,9 @@ function App() {
       setUsdcContract(tempUsdcContract);
       setUsdcDecimals(tempUsdcDecimals);
 
-      console.log('Loading offers and user description.');
+      // Load data
       await loadOffers(tempMarketplaceContract);
       await loadUserDescription();
-      console.log('Wallet connected successfully.');
       handleChatInitialization();
     } catch (error) {
       console.error('Error connecting wallet:', error);
@@ -969,7 +1031,10 @@ function App() {
       if (window.ethereum) {
         await window.ethereum.request({ method: 'eth_requestAccounts' });
       } else {
-        setMessage({ type: 'danger', text: 'MetaMask is not installed.' });
+        setMessage({
+          type: 'danger',
+          text: 'MetaMask is not installed.',
+        });
       }
     } catch (error) {
       console.error('Error changing account:', error);
@@ -1000,7 +1065,9 @@ function App() {
     try {
       if (provider && account) {
         const balance = await provider.getBalance(account);
-        const formattedBalance = parseFloat(formatUnits(balance, parseInt(currencyDecimals))).toFixed(4);
+        const formattedBalance = parseFloat(
+          formatUnits(balance, parseInt(currencyDecimals))
+        ).toFixed(4);
         setNativeBalance(formattedBalance);
       }
     } catch (error) {
@@ -1019,7 +1086,6 @@ function App() {
         setMessage({ type: 'danger', text: 'Please enter a valid mint amount.' });
         return;
       }
-
       const recipient = mintRecipient.trim() === '' ? account : mintRecipient.trim();
       const amountInWei = parseUnits(mintAmount, usdcDecimals);
 
@@ -1071,7 +1137,7 @@ function App() {
         tempAllOffers.push(offerObj);
       }
 
-      // Collect average scores for all senders
+      // Collect average scores for senders
       for (let offer of tempAllOffers) {
         const senderAddress = offer.sender.toLowerCase();
         if (senderAddress !== ZeroAddress.toLowerCase()) {
@@ -1079,13 +1145,16 @@ function App() {
             const profile = await contract.userProfiles(senderAddress);
             const totalScore = Number(profile.totalScoreAsSender);
             const numFinalized = Number(profile.numOffersFinalizedAsSender);
-            const averageScore = numFinalized > 0 ? parseFloat(totalScore / numFinalized).toFixed(2) : 'N/A';
+            const averageScore =
+              numFinalized > 0
+                ? parseFloat(totalScore / numFinalized).toFixed(2)
+                : 'N/A';
             userStats[senderAddress] = { averageScore };
           }
         }
       }
 
-      // Attach averageScore to each offer
+      // Attach averageScore
       const enrichedAllOffers = tempAllOffers.map((offer) => {
         const senderAddress = offer.sender.toLowerCase();
         return {
@@ -1124,12 +1193,13 @@ function App() {
     setFormValues({ ...formValues, [e.target.name]: e.target.value });
   };
 
-  // Updated createOffer to account for depositPercentage from the contract
+  // Creating offers
   const createOffer = async (offerType) => {
     try {
       setLoading(true);
       const { productDescription, productValue } = formValues;
 
+      // Basic checks
       if (!productDescription) {
         setMessage({ type: 'danger', text: 'Please provide a product description.' });
         setLoading(false);
@@ -1137,17 +1207,20 @@ function App() {
       }
 
       if (offerType === 'ReceiverInitiated') {
-        // No upfront USDC transfer from the receiver
+        // No upfront from receiver
         const tx = await marketplaceContract.createOfferByReceiver(productDescription);
         await tx.wait();
-
         setMessage({ type: 'success', text: 'Offer created successfully!' });
-        setFormValues({ productDescription: '', productValue: '', offerType: 'ReceiverInitiated' });
+        setFormValues({
+          productDescription: '',
+          productValue: '',
+          offerType: 'ReceiverInitiated',
+        });
         await loadOffers(marketplaceContract);
         await loadUsdcBalance();
         await loadNativeBalance();
       } else {
-        // Sender Initiated -> deposit = depositPercentage% of productValue
+        // Sender-initiated
         if (!productValue || parseFloat(productValue) <= 0) {
           setMessage({ type: 'danger', text: 'Please provide a valid product value.' });
           setLoading(false);
@@ -1158,20 +1231,20 @@ function App() {
         const valueInWei = parseUnits(productValueString, usdcDecimals);
         const valueInBigInt = ethersToBigInt(valueInWei);
 
-        // Check depositPercentage from contract
-        const dp = await marketplaceContract.depositPercentage(); // e.g., 50
+        // Check deposit from contract
+        const dp = await marketplaceContract.depositPercentage(); // e.g. 50
         const deposit = (valueInBigInt * BigInt(dp)) / BigInt(100);
         const depositUSDC = parseFloat(formatUnits(deposit, usdcDecimals)).toFixed(2);
 
-        // Show confirmation modal for the deposit
+        // Show confirmation for deposit
         setConfirmAmount(depositUSDC);
         setShowConfirmModal(true);
 
-        // Set the callback to execute upon confirmation
+        // Callback
         setConfirmCallback(() => async () => {
           setLoading(true);
 
-          // Ensure user has approved enough USDC for the deposit
+          // Approve if needed
           const currentAllowance = await usdcContract.allowance(account, palketaddress);
           if (currentAllowance < deposit) {
             const approveTx = await usdcContract.approve(palketaddress, deposit);
@@ -1185,7 +1258,11 @@ function App() {
           await tx.wait();
 
           setMessage({ type: 'success', text: 'Offer created successfully!' });
-          setFormValues({ productDescription: '', productValue: '', offerType: 'ReceiverInitiated' });
+          setFormValues({
+            productDescription: '',
+            productValue: '',
+            offerType: 'ReceiverInitiated',
+          });
           await loadOffers(marketplaceContract);
           await loadUsdcBalance();
           await loadNativeBalance();
@@ -1278,7 +1355,7 @@ function App() {
       console.error(`Error forfeiting offer ${offerId}:`, error);
       setMessage({
         type: 'danger',
-        text: `Error forfeiting offer ${offerId}: ` + (error.reason || error.message),
+        text: `Error forfeiting offer ${offerId}: ${error.reason || error.message}`,
       });
     } finally {
       setLoading(false);
@@ -1294,7 +1371,6 @@ function App() {
           offer.state === 1 &&
           offer.acceptanceTime + 180 * 24 * 60 * 60 <= currentTime
       );
-
       if (expiredOffers.length === 0) {
         setMessage({ type: 'info', text: 'No expired offers to forfeit.' });
         return;
@@ -1319,38 +1395,40 @@ function App() {
     setShowRequestModal(true);
   };
 
-  // Updated to show a confirmation for the locked deposit rather than a fixed 0.5 or 1.5 factor
   const handleRequestParticipation = async (bidValue) => {
     try {
       setLoading(true);
       const offer = currentOfferForParticipation;
       let totalAmount;
+
       if (offer.offerType === 0) {
-        // ReceiverInitiated => participant provides bidPrice + deposit (= depositPercentage% of bidPrice)
+        // ReceiverInitiated => user provides bidPrice + deposit
         const bidInWei = parseUnits(bidValue, usdcDecimals);
         const dp = await marketplaceContract.depositPercentage();
         const deposit = (ethersToBigInt(bidInWei) * BigInt(dp)) / BigInt(100);
         totalAmount = deposit;
       } else {
-        // SenderInitiated => participant must lock productValue + deposit
+        // SenderInitiated => user must lock productValue + deposit
         totalAmount = offer.productValue + offer.deposit;
       }
 
       const totalUSDC = parseFloat(formatUnits(totalAmount, usdcDecimals)).toFixed(2);
 
-      // Show confirmation modal
+      // Show confirm modal
       setConfirmAmount(totalUSDC);
       setShowConfirmModal(true);
+
       setConfirmCallback(() => async () => {
         setLoading(true);
-        // Approve if needed, then requestParticipation
+
+        // Approve
         const allowance = await usdcContract.allowance(account, palketaddress);
         if (allowance < totalAmount) {
           const approveTx = await usdcContract.approve(palketaddress, totalAmount);
           await approveTx.wait();
         }
 
-        // **Provide Consent to the Counterpart User**
+        // XMTP: Provide consent to counterpart user
         await xmtpClient.setConsentStates([
           {
             entity: offer.offerType === 0 ? offer.receiver : offer.sender,
@@ -1361,7 +1439,7 @@ function App() {
 
         const tx = await marketplaceContract.requestParticipation(
           offer.offerId,
-          offer.offerType === 0 ? bidValue : 0 // pass the bidValue if ReceiverInitiated, or 0 for SenderInitiated
+          offer.offerType === 0 ? bidValue : 0
         );
         await tx.wait();
 
@@ -1399,7 +1477,10 @@ function App() {
           const p = await marketplaceContract.participationRequests(offerId, i);
           const applicant = p[0];
           const bidPrice = Number(p[2]);
-          const bidPriceFormatted = bidPrice > 0 ? parseFloat(formatUnits(bidPrice, usdcDecimals)).toFixed(2) : 0;
+          const bidPriceFormatted =
+            bidPrice > 0
+              ? parseFloat(formatUnits(bidPrice, usdcDecimals)).toFixed(2)
+              : 0;
           arr.push({ applicant, bidPrice: bidPriceFormatted });
           i++;
         } catch (error) {
@@ -1409,22 +1490,26 @@ function App() {
       setParticipants(arr);
     } catch (error) {
       console.error('Error loading participants:', error);
-      setMessage({ type: 'danger', text: 'Error loading participants: ' + (error.reason || error.message) });
+      setMessage({
+        type: 'danger',
+        text: 'Error loading participants: ' + (error.reason || error.message),
+      });
     } finally {
       setLoadingParticipants(false);
     }
   };
 
-  // Updated chooseParticipant to handle deposit dynamically
   const chooseParticipant = async (participantAddress) => {
     try {
       setLoading(true);
       const offerId = currentOfferForChoosing.offerId;
-
       let totalAmount = 0n;
+
       if (currentOfferForChoosing.offerType === 0) {
-        // ReceiverInitiated => receiver must lock P+D for the chosen participant
-        const chosenPart = participants.find((p) => p.applicant.toLowerCase() === participantAddress.toLowerCase());
+        // ReceiverInitiated => receiver must lock P+D for chosen participant
+        const chosenPart = participants.find(
+          (p) => p.applicant.toLowerCase() === participantAddress.toLowerCase()
+        );
         if (!chosenPart) {
           setMessage({ type: 'danger', text: 'Chosen participant not found.' });
           return;
@@ -1434,7 +1519,7 @@ function App() {
         const deposit = (ethersToBigInt(bidWei) * BigInt(dp)) / BigInt(100);
         totalAmount = bidWei + deposit;
       } else {
-        // SenderInitiated => no extra from the sender upon choosing
+        // SenderInitiated => no extra from the sender to choose
         totalAmount = 0n;
       }
 
@@ -1450,8 +1535,8 @@ function App() {
             const approveTx = await usdcContract.approve(palketaddress, totalAmount);
             await approveTx.wait();
           }
-          
-          // **Provide Consent to the Counterpart User**
+
+          // XMTP: Provide Consent
           await xmtpClient.setConsentStates([
             {
               entity: participantAddress,
@@ -1495,13 +1580,14 @@ function App() {
     }
   };
 
-  // Helper function to convert hex to bytes
+  // XMTP / Chat
+  // Convert hex key to bytes
   function hexToBytes(hex) {
     if (hex.startsWith('0x')) {
       hex = hex.slice(2);
     }
     if (hex.length !== 64) {
-      throw new Error('Hex string must be 64 characters (32 bytes)');
+      throw new Error('Hex string must be 64 characters (32 bytes).');
     }
     const bytes = [];
     for (let c = 0; c < hex.length; c += 2) {
@@ -1512,45 +1598,32 @@ function App() {
 
   const initializeXmtp = async (encryptionKey) => {
     try {
-      if (!provider) {
-        throw new Error('No provider found, cannot initialize XMTP.');
-      }
-      if (!account) {
-        throw new Error('No account found, cannot initialize XMTP.');
-      }
+      if (!provider) throw new Error('No provider found, cannot initialize XMTP.');
+      if (!account) throw new Error('No account found, cannot initialize XMTP.');
 
-      // Convert the user-input encryption key into bytes
       let encryptionBytes;
       try {
         encryptionBytes = hexToBytes(encryptionKey);
       } catch (hexError) {
-        // Handle hex conversion errors separately
         console.error('Invalid hex key:', hexError.message);
         alert(`Invalid encryption key: ${hexError.message}`);
-        return; // Stop initialization
+        return;
       }
 
-      // Create an XMTP-compatible Signer object
+      // XMTP-compatible "signer"
       const xmtpSigner = {
         getAddress: () => account,
         signMessage: async (message) => {
-          // Use your ethers.js signer under the hood
           const signature = await signer.signMessage(message);
-          // Convert the signature into bytes for XMTP
           return toBytes(signature);
         },
       };
 
-      // Now create the XMTP client with that signer
-      console.log('Creating XMTP client');
       const client = await Client.create(xmtpSigner, encryptionBytes, {
         env: xmtpEnv,
       });
-      console.log('XMTP client created', client);
-      // Store client in state
       setXmtpClient(client);
       setShowEncryptionModal(false);
-      console.log('Modal should now be closed');
     } catch (error) {
       console.error('Error initializing XMTP client:', error);
       alert(`XMTP initialization failed: ${error.message}`);
@@ -1560,7 +1633,9 @@ function App() {
   const generateRandomKey = async () => {
     const randomBytes = new Uint8Array(32);
     window.crypto.getRandomValues(randomBytes);
-    const hexKey = Array.from(randomBytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    const hexKey = Array.from(randomBytes, (b) =>
+      b.toString(16).padStart(2, '0')
+    ).join('');
     setGeneratedKey(hexKey);
   };
 
@@ -1570,12 +1645,12 @@ function App() {
     }
   };
 
-  // Removed UserInfo component here as it's now handled within the main App component
-
+  // Switch Network from dropdown
   const switchNetwork = async (key) => {
     setNetworkEnv(key);
   };
 
+  // ConfirmTransaction Modal handlers
   const handleConfirmCancel = () => {
     setShowConfirmModal(false);
     setConfirmAmount('');
@@ -1615,106 +1690,111 @@ function App() {
         </Alert>
       )}
 
-<Navbar bg="dark" variant="dark" expand="lg">
-      <Container fluid>
-        {/* Brand */}
-        <Navbar.Brand href="#" className="d-flex align-items-center">
-          <img
-            src="/palket.png" 
-            width="40" 
-            height="40" 
-            className="d-inline-block align-top me-2"
-            alt="Palket Logo"
-          />
-          <div style={{ lineHeight: "1.2" }}>
-            <span style={{ fontWeight: "bold", fontSize: "1.5em" }}>Palket:</span>
-            <br />
-            The Pal-to-Pal Market
-          </div>
-        </Navbar.Brand>
-        
-        {/* Toggle for mobile view */}
-        <Navbar.Toggle aria-controls="navbarResponsive" />
-        
-        {/* Navbar Links */}
-        <Navbar.Collapse id="navbarResponsive">
-          <Nav className="me-auto">
-            {/* Individual Menu Items */}
-            <Nav.Link
-              eventKey="Buy"
-              active={selectedMenu === 'Buy'}
-              onClick={() => setSelectedMenu('Buy')}
-            >
-              Buy
-            </Nav.Link>
-            <Nav.Link
-              eventKey="Sell"
-              active={selectedMenu === 'Sell'}
-              onClick={() => setSelectedMenu('Sell')}
-            >
-              Sell
-            </Nav.Link>
-            <Nav.Link
-              eventKey="Lottery"
-              active={selectedMenu === 'Lottery'}
-              onClick={() => setSelectedMenu('Lottery')}
-            >
-              Lottery
-            </Nav.Link>
-            <Nav.Link
-              eventKey="Chat"
-              active={selectedMenu === 'Chat'}
-              onClick={() => setSelectedMenu('Chat')}
-            >
-              Chat
-            </Nav.Link>
-            <Nav.Link
-              eventKey="Profile"
-              active={selectedMenu === 'Profile'}
-              onClick={() => setSelectedMenu('Profile')}
-            >
-              Profile
-            </Nav.Link>
-          </Nav>
-
-          {/* Right Side of Navbar */}
-          <Nav className="ms-auto align-items-center">
-            {/* Account and Balances */}
-            <div className="text-center me-3">
-              <div style={{ fontWeight: 'bold' }}>
-                {account
-                  ? `Account: ${account.substring(0, 6)}...${account.substring(account.length - 4)}`
-                  : 'Not connected'}
-              </div>
-              {account && (
-                <div>
-                  <div>{nativeBalance !== null ? `${nativeBalance} ${currencySymbol}` : '...'} </div>
-                  <div>{usdcBalance !== null ? `${usdcBalance} USDC` : '...'}</div>
-                </div>
-              )}
+      {/* Navbar */}
+      <Navbar bg="dark" variant="dark" expand="lg">
+        <Container fluid>
+          <Navbar.Brand href="#" className="d-flex align-items-center">
+            <img
+              src={palketLogo}
+              width="40"
+              height="40"
+              className="d-inline-block align-top me-2"
+              alt="Palket Logo"
+            />
+            <div style={{ lineHeight: '1.2' }}>
+              <span style={{ fontWeight: 'bold', fontSize: '1.5em' }}>Palket:</span>
+              <br />
+              The Pal-to-Pal Market
             </div>
+          </Navbar.Brand>
 
-            {/* Switch Network Dropdown */}
-            <NavDropdown title="Network" id="network-dropdown" className="me-3">
-              {networkKeys.map((key) => (
-                <NavDropdown.Item key={key} onClick={() => switchNetwork(key)}>
-                  {PalketInfo.networks[key].name}
-                </NavDropdown.Item>
-              ))}
-            </NavDropdown>
+          <Navbar.Toggle aria-controls="navbarResponsive" />
 
-            {/* Connect or Change Account Button */}
-            <Button
-              variant="outline-light"
-              onClick={account ? changeAccount : connectWallet}
-            >
-              {account ? 'Change Account' : 'Connect'}
-            </Button>
-          </Nav>
-        </Navbar.Collapse>
-      </Container>
-    </Navbar>
+          <Navbar.Collapse id="navbarResponsive">
+            <Nav className="me-auto">
+              <Nav.Link
+                eventKey="Home"
+                active={selectedMenu === 'Home'}
+                onClick={() => setSelectedMenu('Home')}
+              >
+                Home
+              </Nav.Link>
+              <Nav.Link
+                eventKey="Buy"
+                active={selectedMenu === 'Buy'}
+                onClick={() => setSelectedMenu('Buy')}
+              >
+                Buy
+              </Nav.Link>
+              <Nav.Link
+                eventKey="Sell"
+                active={selectedMenu === 'Sell'}
+                onClick={() => setSelectedMenu('Sell')}
+              >
+                Sell
+              </Nav.Link>
+              <Nav.Link
+                eventKey="Lottery"
+                active={selectedMenu === 'Lottery'}
+                onClick={() => setSelectedMenu('Lottery')}
+              >
+                Lottery
+              </Nav.Link>
+              <Nav.Link
+                eventKey="Chat"
+                active={selectedMenu === 'Chat'}
+                onClick={() => setSelectedMenu('Chat')}
+              >
+                Chat
+              </Nav.Link>
+              <Nav.Link
+                eventKey="Profile"
+                active={selectedMenu === 'Profile'}
+                onClick={() => setSelectedMenu('Profile')}
+              >
+                Profile
+              </Nav.Link>
+            </Nav>
 
+            <Nav className="ms-auto align-items-center">
+              <div className="text-center me-3">
+                <div style={{ fontWeight: 'bold' }}>
+                  {account
+                    ? `Account: ${account.substring(0, 6)}...${account.substring(account.length - 4)}`
+                    : 'Not connected'}
+                </div>
+                {account && (
+                  <div>
+                    <div>
+                      {nativeBalance !== null
+                        ? `${nativeBalance} ${currencySymbol}`
+                        : '...'}
+                    </div>
+                    <div>
+                      {usdcBalance !== null ? `${usdcBalance} USDC` : '...'}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <NavDropdown title="Network" id="network-dropdown" className="me-3">
+                {networkKeys.map((key) => (
+                  <NavDropdown.Item key={key} onClick={() => switchNetwork(key)}>
+                    {PalketInfo.networks[key].name}
+                  </NavDropdown.Item>
+                ))}
+              </NavDropdown>
+              <Button
+                variant="outline-light"
+                onClick={account ? changeAccount : connectWallet}
+              >
+                {account ? 'Change Account' : 'Connect'}
+              </Button>
+            </Nav>
+          </Navbar.Collapse>
+        </Container>
+      </Navbar>
+
+      {/* Main Content */}
       {account ? (
         <Container fluid className="mt-4">
           {message && (
@@ -1723,51 +1803,62 @@ function App() {
             </Alert>
           )}
 
-        
-          {/* **Conditional Rendering Based on Selected Menu** */}
+          {/* Condition: selectedMenu === 'Buy' */}
           {selectedMenu === 'Buy' && (
-            // **Buy Products/Services with Crypto Section**
             <Row>
-              {/* a) Buy Products/Services with Crypto */}
               <Col lg={4} md={12} className="mb-4">
                 <Card>
                   <Card.Header>
                     <h5>Buy Products/Services with Crypto</h5>
                   </Card.Header>
                   <Card.Body>
-                    {/* Option to create an offer as a receiver */}
-                    <h6>Create Offer </h6>
+                    <Alert variant="secondary">
+                      <strong>Receiver-Initiated Offers:</strong>  
+                      <br />
+                      Here, you (the buyer/receiver) only need to provide a description.  
+                      Sellers will “request participation” by bidding with a deposit.  
+                      Once you choose a participant, the offer becomes Accepted.  
+                      For more details, see the <em>Home</em> tab.
+                    </Alert>
+
+                    <h6>Create Offer</h6>
                     <Form>
                       <Form.Group controlId="productDescription">
                         <Form.Label>Product Description</Form.Label>
                         <Form.Control
                           type="text"
                           name="productDescription"
-                          placeholder="Product Description"
+                          placeholder="Describe what you need"
                           value={formValues.productDescription}
                           onChange={handleInputChange}
                         />
                       </Form.Group>
 
-                      <Button variant="primary" onClick={() => createOffer('ReceiverInitiated')} disabled={loading} className="mt-3">
+                      <Button
+                        variant="primary"
+                        onClick={() => createOffer('ReceiverInitiated')}
+                        disabled={loading}
+                        className="mt-3"
+                      >
                         {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
                       </Button>
                     </Form>
 
-                    {/* List of offers created as Sender not yet accepted */}
-                    <h6 className="mt-4">Active Purchase Offers
+                    <h6 className="mt-4">
+                      Active Purchase Offers
                       <Button
                         variant="outline-primary"
                         onClick={() => loadOffers(marketplaceContract)}
                         className="ms-2"
                       >
                         Refresh Offers
-                      </Button>  
-                    </h6> 
-                    {allOffers.filter(offer => offer.offerType === 1 && offer.state === 0).length > 0 ? (
+                      </Button>
+                    </h6>
+                    {allOffers.filter((offer) => offer.offerType === 1 && offer.state === 0)
+                      .length > 0 ? (
                       <Row className="g-4">
                         {allOffers
-                          .filter(offer => offer.offerType === 1 && offer.state === 0)
+                          .filter((offer) => offer.offerType === 1 && offer.state === 0)
                           .map((offer, index) => (
                             <Col key={index} lg={12} md={12} sm={12}>
                               <OfferCard
@@ -1798,26 +1889,31 @@ function App() {
             </Row>
           )}
 
+          {/* Condition: selectedMenu === 'Sell' */}
           {selectedMenu === 'Sell' && (
-            // **Sell Products/Services with Crypto Section**
             <Row>
-              {/* b) Sell Products/Services for Crypto */}
               <Col lg={4} md={12} className="mb-4">
                 <Card>
                   <Card.Header>
                     <h5>Sell Products/Services for Crypto</h5>
                   </Card.Header>
                   <Card.Body>
-                    {/* Option to create an offer as a sender */}
+                    <Alert variant="secondary">
+                      <strong>Sender-Initiated Offers:</strong>  
+                      <br />
+                      You (the seller/sender) lock a portion of your product value as a deposit.  
+                      Potential buyers then lock the entire product value plus a deposit when requesting participation.  
+                      More details in the <em>Home</em> tab.
+                    </Alert>
+
                     <h6>Create Offer as Seller</h6>
                     <Form>
-                      
                       <Form.Group controlId="productDescription">
                         <Form.Label>Product Description</Form.Label>
                         <Form.Control
                           type="text"
                           name="productDescription"
-                          placeholder="Product Description"
+                          placeholder="What are you selling?"
                           value={formValues.productDescription}
                           onChange={handleInputChange}
                         />
@@ -1828,7 +1924,7 @@ function App() {
                         <Form.Control
                           type="number"
                           name="productValue"
-                          placeholder="Product Value (USDC)"
+                          placeholder="Product Value"
                           value={formValues.productValue}
                           onChange={handleInputChange}
                           min="0"
@@ -1836,13 +1932,18 @@ function App() {
                         />
                       </Form.Group>
 
-                      <Button variant="primary" onClick={() => createOffer('SenderInitiated')} disabled={loading} className="mt-3">
+                      <Button
+                        variant="primary"
+                        onClick={() => createOffer('SenderInitiated')}
+                        disabled={loading}
+                        className="mt-3"
+                      >
                         {loading ? <Spinner animation="border" size="sm" /> : 'Create Offer'}
                       </Button>
                     </Form>
 
-                    {/* List of offers created as Receiver not yet accepted */}
-                    <h6 className="mt-4">Active Sales Offers
+                    <h6 className="mt-4">
+                      Active Sales Offers
                       <Button
                         variant="outline-primary"
                         onClick={() => loadOffers(marketplaceContract)}
@@ -1851,10 +1952,11 @@ function App() {
                         Refresh Offers
                       </Button>
                     </h6>
-                    {allOffers.filter(offer => offer.offerType === 0 && offer.state === 0).length > 0 ? (
+                    {allOffers.filter((offer) => offer.offerType === 0 && offer.state === 0)
+                      .length > 0 ? (
                       <Row className="g-4">
                         {allOffers
-                          .filter(offer => offer.offerType === 0 && offer.state === 0)
+                          .filter((offer) => offer.offerType === 0 && offer.state === 0)
                           .map((offer, index) => (
                             <Col key={index} lg={12} md={12} sm={12}>
                               <OfferCard
@@ -1885,17 +1987,24 @@ function App() {
             </Row>
           )}
 
+          {/* Condition: selectedMenu === 'Lottery' */}
           {selectedMenu === 'Lottery' && (
-            // **Lottery Section**
             <Row>
-              {/* c) Lottery */}
               <Col lg={4} md={12} className="mb-4">
                 <Card>
                   <Card.Header>
                     <h5>Lottery</h5>
                   </Card.Header>
                   <Card.Body>
-                    {/* List of accepted and expired offers */}
+                    <Alert variant="secondary">
+                      Offers that remain <strong>Accepted</strong> but are
+                      never finalized for too long (e.g. 180 days) can be{' '}
+                      <strong>forfeited</strong>. Part of the funds go to the
+                      caller, part to the contract owner, and the rest to a
+                      random participant. This ensures idle or abandoned offers
+                      don’t stay locked forever.
+                    </Alert>
+
                     <h6>Expired Accepted Offers
                       <Button
                         variant="outline-primary"
@@ -1905,10 +2014,21 @@ function App() {
                         Refresh Offers
                       </Button>
                     </h6>
-                    {allOffers.filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000)).length > 0 ? (
+                    {allOffers.filter(
+                      (offer) =>
+                        offer.state === 1 &&
+                        offer.acceptanceTime + 180 * 24 * 60 * 60 <=
+                          Math.floor(Date.now() / 1000)
+                    ).length > 0 ? (
                       <Row className="g-4">
                         {allOffers
-                          .filter(offer => offer.state === 1 && (offer.acceptanceTime + 180 * 24 * 60 * 60) <= Math.floor(Date.now() / 1000))
+                          .filter(
+                            (offer) =>
+                              offer.state === 1 &&
+                              offer.acceptanceTime +
+                                180 * 24 * 60 * 60 <=
+                                Math.floor(Date.now() / 1000)
+                          )
                           .map((offer, index) => (
                             <Col key={index} lg={12} md={12} sm={12}>
                               <OfferCard
@@ -1931,42 +2051,37 @@ function App() {
                           ))}
                       </Row>
                     ) : (
-                      <p className="text-muted">No expired accepted offers available for forfeiture.</p>
+                      <p className="text-muted">
+                        No expired accepted offers available for forfeiture.
+                      </p>
                     )}
 
-                    {/* Button to proceed with forfeiture */}
                     <Button
                       variant="warning"
                       onClick={handleForfeitExpiredOffers}
                       disabled={loading}
                       className="mt-3"
                     >
-                      {loading ? <Spinner animation="border" size="sm" /> : 'Forfeit Expired Offers'}
+                      {loading ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : (
+                        'Forfeit Expired Offers'
+                      )}
                     </Button>
-                    {/* **Updated Alert Component** */}
-                    <Alert variant="warning" className="mt-3">
-                      <strong>Note:</strong> If an offer is forfeited:
-                      <ul>
-                        <li>10% goes to the caller</li>
-                        <li>10% goes to the contract creator</li>
-                        <li>80% goes to a random participant</li>
-                      </ul>
-                    </Alert>
                   </Card.Body>
                 </Card>
               </Col>
             </Row>
           )}
 
+          {/* Condition: selectedMenu === 'Chat' */}
           {selectedMenu === 'Chat' && (
-            // **Chat Section**
             <Card className="mb-4">
               <Card.Header>
                 <h4>Chat</h4>
               </Card.Header>
               <Card.Body style={{ padding: '0' }}>
                 {!xmtpClient ? (
-                  // Fixed the onClick handler by mapping it to handleChatInitialization
                   <Button variant="primary" onClick={handleChatInitialization}>
                     Start Chat
                   </Button>
@@ -1977,8 +2092,8 @@ function App() {
             </Card>
           )}
 
+          {/* Condition: selectedMenu === 'Profile' */}
           {selectedMenu === 'Profile' && (
-            // **Profile Section**
             <UserProfile
               marketplaceContract={marketplaceContract}
               usdcDecimals={usdcDecimals}
@@ -1989,20 +2104,93 @@ function App() {
               onSelectMenu={setSelectedMenu}
               onSetProfileAddress={setSelectedProfileAddress}
             />
+          )}
 
+          {/* Condition: selectedMenu === 'Wiki' */}
+          {selectedMenu === 'Home' && (
+            <Card className="mb-4">
+              <Card.Header>
+                <h4>Palket Basics</h4>
+              </Card.Header>
+              <Card.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                <p>
+                  <strong>Palket</strong> facilitates on-chain
+                  exchanges between a <strong>Receiver</strong> and a <strong>Sender</strong>{' '}
+                  through deposits, fees, a rating system, and a forfeit (lottery) mechanism.
+                  Below you’ll find key concepts about fees, deposits, why there is no dispute
+                  mechanism, and how the lottery system works.
+                </p>
+
+                <h5>How It Works (Short Overview)</h5>
+                <ol>
+                  <li><strong>Offer Creation:</strong> A user (Receiver or Sender) creates an offer describing the product or service. Depending on the offer type (Receiver-initiated or Sender-initiated), different deposits are locked.</li>
+                  <li><strong>Participation Requests:</strong> The opposite role can request participation by locking the required amount.</li>
+                  <li><strong>Choosing a Participant:</strong> The offer creator selects one participant, and all others are refunded automatically.</li>
+                  <li><strong>Finalization:</strong> The Receiver finalizes and rates the Sender, releasing funds accordingly.</li>
+                  <li><strong>Canceling or Forfeiting:</strong> Offers can be canceled if still in "Created". If stuck in "Accepted" for too long, anyone can forfeit, triggering the lottery-like fund distribution.</li>
+                </ol>
+
+                <h5>Fees</h5>
+                <ul>
+                  <li>
+                    <strong>Finalize Fee:</strong> A percentage of the product value is taken by the contract owner when the offer is finalized.
+                  </li>
+                  <li>
+                    <strong>Forfeit Fee:</strong> If an offer is forfeited, part of the funds go to the contract owner, part to the caller, and the rest to a random participant.
+                  </li>
+                </ul>
+
+                <h5>Deposits</h5>
+                <p>
+                  Both Receiver and Sender lock deposits to ensure they have “skin in the game.”
+                  This reduces dishonest or careless behavior:
+                </p>
+                <ul>
+                  <li><strong>Receiver’s deposit:</strong> Encourages them to finalize in good faith.</li>
+                  <li><strong>Sender’s deposit:</strong> Ensures they actually deliver the product or service.</li>
+                </ul>
+
+                <h5>No Dispute Mechanism</h5>
+                <p>
+                  Palket doesn’t include arbitration because it’s nearly impossible to automate
+                  real-world product delivery verification on-chain. Instead, the system relies on
+                  deposits and ratings to build trust and penalize bad actors.
+                </p>
+
+                <h5>The Lottery (Forfeit Mechanism)</h5>
+                <p>
+                  If an offer is stuck in “Accepted” too long (e.g., 180 days), anyone can call
+                  <code>forfeitOffer</code>. Funds then go partly to the forfeit caller, the contract owner,
+                  and a random participant from the pool. This encourages clearing out abandoned offers.
+                </p>
+
+                <h5>Example Decision Tree</h5>
+                <p>
+                  The basic outcomes revolve around whether or not the Sender delivers and whether or not
+                  the Receiver finalizes. Deposits and finalization fees help enforce fairness.
+                </p>
+
+                <p>
+                  See more examples and diagrams in the official{' '}
+                  <em>Palket Source Code / Documentation.</em>
+                </p>
+              </Card.Body>
+            </Card>
           )}
 
         </Container>
       ) : (
         <Container className="mt-4">
           <Alert variant="info">
-            <strong>Wallet not connected!</strong><br />
-            Please connect your wallet (using the <em>Connect</em> button in the top-right corner) to access the marketplace.
+            <strong>Wallet not connected!</strong>
+            <br />
+            Please connect your wallet (using the <em>Connect</em> button in the top-right
+            corner) to access the marketplace.
           </Alert>
         </Container>
       )}
 
-      {/* Description Modal */}
+      {/* Modals */}
       <Modal show={showDescriptionModal} onHide={() => setShowDescriptionModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Set Your Description</Modal.Title>
@@ -2028,7 +2216,6 @@ function App() {
         </Modal.Footer>
       </Modal>
 
-      {/* Request Participation Modal */}
       {currentOfferForParticipation && (
         <RequestParticipationModal
           show={showRequestModal}
@@ -2042,7 +2229,6 @@ function App() {
         />
       )}
 
-      {/* Choose Participant Modal */}
       {currentOfferForChoosing && (
         <ChooseParticipantModal
           show={showChooseModal}
@@ -2053,11 +2239,10 @@ function App() {
           }}
           participants={participants}
           chooseParticipant={chooseParticipant}
-          loading={loadingParticipants} // Pass loadingParticipants instead of global loading
+          loading={loadingParticipants}
         />
       )}
 
-      {/* Confirm Transaction Modal */}
       <ConfirmTransactionModal
         show={showConfirmModal}
         onHide={handleConfirmCancel}
@@ -2066,7 +2251,7 @@ function App() {
         loading={loading}
       />
 
-      {/* Encryption Key Modal for XMTP */}
+      {/* Encryption Key Modal (XMTP) */}
       <Modal show={showEncryptionModal} onHide={() => setShowEncryptionModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Initialize Chat</Modal.Title>
@@ -2112,7 +2297,10 @@ function App() {
                 <br />
                 {generatedKey}
               </Alert>
-              <p>Please store this key in a safe place. If you lose it, you cannot recover your previous conversations.</p>
+              <p>
+                Please store this key in a safe place. If you lose it, you cannot recover your
+                previous conversations.
+              </p>
               <Button
                 variant="primary"
                 onClick={() => {
@@ -2129,8 +2317,6 @@ function App() {
           )}
         </Modal.Body>
       </Modal>
-
-      
     </div>
   );
 }

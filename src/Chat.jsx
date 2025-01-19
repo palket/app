@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert, Form, Button, ListGroup, Badge } from 'react-bootstrap';
 import './Chat.css';
 import { Utils } from '@xmtp/browser-sdk';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const POLLING_INTERVAL_MS = 50000; // Poll every 50 seconds
 
@@ -10,7 +12,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   // --------------------------------------------------------------------------
   // State
   // --------------------------------------------------------------------------
-  const [conversationsMap, setConversationsMap] = useState(new Map());
+  const [conversations, setConversations] = useState([]); // Array of { inboxId, conv }
   const [messagesByConversation, setMessagesByConversation] = useState({});
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [messageText, setMessageText] = useState('');
@@ -25,36 +27,15 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   // --------------------------------------------------------------------------
   // Helper: Get DM conversation inbox ID (async)
   // --------------------------------------------------------------------------
-  const getInboxId = async (conv) => {
-    if (!conv.cachedInboxId) {
-      try {
-        // dmPeerInboxId() might return either a string or an object with { value: string }
-        // Adjust based on your actual XMTP environment
-        const inboxIdObj = await conv.dmPeerInboxId();
-        // If it returns { value: '...' }, do: conv.cachedInboxId = inboxIdObj.value;
-        conv.cachedInboxId = inboxIdObj.value || inboxIdObj;
-      } catch (err) {
-        console.error('Error fetching inboxId for conversation:', err);
-        throw new Error('Failed to fetch inboxId.');
-      }
+  const getInboxId = useCallback(async (conv) => {
+    try {
+      const inboxId = await conv.dmPeerInboxId();
+      return inboxId; // Assuming dmPeerInboxId now reliably returns a string
+    } catch (err) {
+      console.error('Error fetching inboxId for conversation:', err);
+      throw new Error('Failed to fetch inboxId.');
     }
-    return conv.cachedInboxId;
-  };
-
-  // --------------------------------------------------------------------------
-  // Locally check for an existing DM by its cachedInboxId
-  // --------------------------------------------------------------------------
-  const getDmByInboxId = useCallback(
-    (inboxId) => {
-      for (let conv of conversationsMap.values()) {
-        if (conv.cachedInboxId === inboxId) {
-          return conv;
-        }
-      }
-      return null;
-    },
-    [conversationsMap]
-  );
+  }, []);
 
   // --------------------------------------------------------------------------
   // Fetch messages for a single conversation
@@ -62,7 +43,6 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   const fetchMessagesForConversation = useCallback(
     async (conv) => {
       if (!conv) return [];
-      const inboxId = await getInboxId(conv);
       try {
         const fetchedMessages = await conv.messages();
         // Sort by timestamp ascending
@@ -70,6 +50,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
         // Deduplicate
         setMessagesByConversation((prev) => {
+          const inboxId = conv.dmPeerInboxId ? conv.dmPeerInboxId() : 'unknown';
           const existing = prev[inboxId] || [];
           const existingIds = new Set(existing.map((m) => m.id));
           const newUnique = fetchedMessages.filter((m) => !existingIds.has(m.id));
@@ -81,19 +62,16 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
         return fetchedMessages;
       } catch (err) {
-        console.error(`Error fetching messages for ${inboxId}:`, err);
+        console.error(`Error fetching messages for conversation:`, err);
         setError('Failed to fetch messages.');
         return [];
       }
     },
-    [getInboxId]
+    []
   );
 
   // --------------------------------------------------------------------------
-  // Instead of fetching messages for ALL conversations, we only fetch
-  // them for the "latest" or for user-selected conversation.
-  // This significantly reduces load time if a user has many test convs
-  // with the same inbox ID.
+  // Fetch All Conversations
   // --------------------------------------------------------------------------
   const fetchAllConversations = useCallback(async () => {
     setLoadingConversations(true);
@@ -101,56 +79,44 @@ const Chat = ({ xmtpClient, targetAddress }) => {
       await xmtpClient.conversations.syncAll();
       const allConversations = await xmtpClient.conversations.list();
 
-      // We'll store ONLY the "latest" conversation per inboxId
-      // If multiple convs have the same ID, we pick the last one in the array
-      // (assuming the array is sorted by creation time or any other logic).
-      const convsMap = new Map();
-      for (let conv of allConversations) {
-        try {
-          const inboxId = await getInboxId(conv);
+      const conversationsWithInboxId = await Promise.all(
+        allConversations.map(async (conv) => {
+          try {
+            const inboxId = await getInboxId(conv);
+            return { inboxId, conv };
+          } catch (err) {
+            console.warn('Skipping conversation during fetchAll:', err);
+            return null;
+          }
+        })
+      );
 
-          // If there's already a conversation for that inboxId, we replace it
-          // with the new one, effectively keeping the "last" one.
-          // Or skip if you prefer the first one you encounter.
-          convsMap.set(inboxId, conv);
-        } catch (err) {
-          console.warn('Skipping conversation during fetchAll:', err);
-        }
-      }
+      const validConversations = conversationsWithInboxId.filter(Boolean);
+      setConversations(validConversations);
 
-      // Now we store only the final conv for each inbox ID
-      setConversationsMap(convsMap);
-
-      // Initialize unread counts to 0 for these conversation IDs
+      // Initialize unread counts
       const initialUnread = {};
-      convsMap.forEach((_, inboxId) => {
+      validConversations.forEach(({ inboxId }) => {
         initialUnread[inboxId] = 0;
       });
       setUnreadCounts(initialUnread);
 
-      // We do NOT fetch messages for all convs upfront.
-      // Instead, we only fetch messages for the user-selected one
-      // or for new ones we create.
-      // => This avoids big overhead if there's a ton of old convs.
-
-      // If no conversation selected yet, pick the first
-      if (!selectedConversationId && convsMap.size > 0) {
-        const firstInboxId = convsMap.keys().next().value;
+      // Select the first conversation if none is selected
+      if (!selectedConversationId && validConversations.length > 0) {
+        const firstInboxId = validConversations[0].inboxId;
         setSelectedConversationId(firstInboxId);
-        // Optionally fetch messages for that first conversation
-        const firstConv = convsMap.get(firstInboxId);
-        await fetchMessagesForConversation(firstConv);
+        await fetchMessagesForConversation(validConversations[0].conv);
       }
     } catch (err) {
       console.error('Error fetching conversations:', err);
       setError('Failed to fetch conversations.');
     } finally {
-      setLoadingConversations(false); // <-- End loading
+      setLoadingConversations(false);
     }
   }, [xmtpClient, getInboxId, fetchMessagesForConversation, selectedConversationId]);
 
   // --------------------------------------------------------------------------
-  // Initialization effect
+  // Initialization Effect
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!xmtpClient) return;
@@ -180,10 +146,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   }, [xmtpClient, fetchAllConversations]);
 
   // --------------------------------------------------------------------------
-  // Polling for new messages
-  // We skip fetching messages for every conversation; only for the selected one
-  // to reduce load. If you want to track unread on all convs, you'd need to fetch
-  // them, but that might be expensive.
+  // Polling for New Messages
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!xmtpClient) return;
@@ -195,33 +158,41 @@ const Chat = ({ xmtpClient, targetAddress }) => {
         await xmtpClient.conversations.syncAll();
         const allConversations = await xmtpClient.conversations.list();
 
-        // Build a new map that only keeps the last conversation per inboxId
-        const newConvsMap = new Map();
-        for (let conv of allConversations) {
-          try {
-            const inboxId = await getInboxId(conv);
-            newConvsMap.set(inboxId, conv);
-          } catch (err) {
-            console.warn('Skipping group conversation in poll:', err);
+        const conversationsWithInboxId = await Promise.all(
+          allConversations.map(async (conv) => {
+            try {
+              const inboxId = await getInboxId(conv);
+              return { inboxId, conv };
+            } catch (err) {
+              console.warn('Skipping conversation in poll:', err);
+              return null;
+            }
+          })
+        );
+
+        const validConversations = conversationsWithInboxId.filter(Boolean);
+        setConversations(validConversations);
+
+        // Fetch messages for the selected conversation
+        if (selectedConversationId) {
+          const selectedConv = validConversations.find(
+            ({ inboxId }) => inboxId === selectedConversationId
+          )?.conv;
+
+          if (selectedConv) {
+            const newMsgs = await selectedConv.messages();
+            newMsgs.sort((a, b) => Number(a.sentAtNs) - Number(b.sentAtNs));
+
+            setMessagesByConversation((prev) => {
+              const existing = prev[selectedConversationId] || [];
+              const existingIds = new Set(existing.map((m) => m.id));
+              const newUnique = newMsgs.filter((m) => !existingIds.has(m.id));
+              return {
+                ...prev,
+                [selectedConversationId]: [...existing, ...newUnique],
+              };
+            });
           }
-        }
-        setConversationsMap(newConvsMap);
-
-        // Minimally fetch messages for the currently selected conversation
-        if (selectedConversationId && newConvsMap.has(selectedConversationId)) {
-          const conv = newConvsMap.get(selectedConversationId);
-          const newMsgs = await conv.messages();
-          newMsgs.sort((a, b) => Number(a.sentAtNs) - Number(b.sentAtNs));
-
-          setMessagesByConversation((prev) => {
-            const existing = prev[selectedConversationId] || [];
-            const existingIds = new Set(existing.map((m) => m.id));
-            const newUnique = newMsgs.filter((m) => !existingIds.has(m.id));
-            return {
-              ...prev,
-              [selectedConversationId]: [...existing, ...newUnique],
-            };
-          });
         }
       } catch (err) {
         console.error('Error during polling:', err);
@@ -240,7 +211,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   }, [xmtpClient, getInboxId, selectedConversationId]);
 
   // --------------------------------------------------------------------------
-  // Creating or selecting a DM conversation based on targetAddress
+  // Creating or Selecting a DM Conversation Based on targetAddress
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!targetAddress || !xmtpClient) return;
@@ -269,25 +240,20 @@ const Chat = ({ xmtpClient, targetAddress }) => {
         console.log('Derived inboxId =', inboxId, 'for targetAddress =', targetAddress);
 
         // Check if we have a conversation for this inboxId
-        let convToUse = getDmByInboxId(inboxId);
+        let convToUse = conversations.find(({ inboxId: id }) => id === inboxId)?.conv;
         if (!convToUse) {
           console.log('No existing DM found for', inboxId, ', creating a new one...');
           convToUse = await xmtpClient.conversations.newDm(targetAddress);
-          await getInboxId(convToUse); // set its cachedInboxId
+          // No need to cache inboxId
+          const newInboxId = await getInboxId(convToUse);
+          setConversations((prev) => [...prev, { inboxId: newInboxId, conv: convToUse }]);
         } else {
           console.log('Found existing DM conversation for inboxId:', inboxId);
         }
 
-        const finalInboxId = convToUse.cachedInboxId;
+        const finalInboxId = await getInboxId(convToUse);
 
-        // Put it in conversation map, overwriting any older entry
-        setConversationsMap((prev) => {
-          const updated = new Map(prev);
-          updated.set(finalInboxId, convToUse);
-          return updated;
-        });
-
-        // If there's no unread count for this inboxId, initialize it
+        // Initialize unread count if not present
         setUnreadCounts((prev) => ({
           ...prev,
           [finalInboxId]: prev[finalInboxId] || 0,
@@ -303,61 +269,64 @@ const Chat = ({ xmtpClient, targetAddress }) => {
     };
 
     initiateChat();
-  }, [targetAddress, xmtpClient, getDmByInboxId, getInboxId, fetchMessagesForConversation]);
+  }, [targetAddress, xmtpClient, conversations, getInboxId, fetchMessagesForConversation]);
 
   // --------------------------------------------------------------------------
-  // Send a message to the selected conversation
+  // Send a Message to the Selected Conversation
   // --------------------------------------------------------------------------
-  const sendMessage = async () => {
+  const sendMessage = useCallback(async () => {
     if (!selectedConversationId || !messageText.trim()) return;
-    setIsSendingMessage(true);    // <-- Start sending
+    setIsSendingMessage(true);
     try {
-      const conv = conversationsMap.get(selectedConversationId);
-      if (!conv) {
+      const conversation = conversations.find(({ inboxId }) => inboxId === selectedConversationId);
+      if (!conversation) {
         setError('Selected conversation not found.');
         return;
       }
-      await conv.send(messageText.trim());
+      await conversation.conv.send(messageText.trim());
       setMessageText('');
 
       // Fetch messages for the current conversation
-      await fetchMessagesForConversation(conv);
+      await fetchMessagesForConversation(conversation.conv);
+      toast.success('Message sent successfully!');
     } catch (err) {
       console.error('Failed to send message:', err);
       setError('Failed to send message. Please try again.');
     } finally {
-      setIsSendingMessage(false); // <-- Done sending
+      setIsSendingMessage(false);
     }
-  };
+  }, [selectedConversationId, messageText, conversations, fetchMessagesForConversation]);
 
   // --------------------------------------------------------------------------
-  // Manually select a conversation from the side list
+  // Manually Select a Conversation from the Side List
   // --------------------------------------------------------------------------
-  const selectConversation = async (inboxId) => {
-    if (!inboxId || !conversationsMap.has(inboxId)) {
-      setError('Conversation not found.');
-      return;
-    }
-    setSelectedConversationId(inboxId);
-    // Reset unread count
-    setUnreadCounts((prev) => ({
-      ...prev,
-      [inboxId]: 0,
-    }));
+  const selectConversation = useCallback(
+    async (inboxId) => {
+      const conversation = conversations.find(({ inboxId: id }) => id === inboxId);
+      if (!conversation) {
+        setError('Conversation not found.');
+        return;
+      }
+      setSelectedConversationId(inboxId);
+      // Reset unread count
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [inboxId]: 0,
+      }));
 
-    // On selecting a new conversation, load its messages (on demand).
-    const conv = conversationsMap.get(inboxId);
-    await fetchMessagesForConversation(conv);
-  };
+      // Load its messages
+      await fetchMessagesForConversation(conversation.conv);
+    },
+    [conversations, fetchMessagesForConversation]
+  );
 
   // --------------------------------------------------------------------------
-  // Helpers for rendering messages
+  // Helpers for Rendering Messages
   // --------------------------------------------------------------------------
   const getDisplayContent = (msg) => {
     if (!msg) return '';
     const codec = xmtpClient?.codecFor?.(msg.contentType);
     if (!codec) {
-      // If there's a fallback, show it. Otherwise, skip.
       return msg.fallback ?? '';
     }
     return msg.content;
@@ -370,10 +339,10 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   };
 
   // --------------------------------------------------------------------------
-  // Derived: The selected conversation and its messages
+  // Derived: The Selected Conversation and Its Messages
   // --------------------------------------------------------------------------
   const selectedConversation = selectedConversationId
-    ? conversationsMap.get(selectedConversationId)
+    ? conversations.find(({ inboxId }) => inboxId === selectedConversationId)?.conv
     : null;
 
   const messagesForSelected = messagesByConversation[selectedConversationId] || [];
@@ -381,18 +350,18 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   // --------------------------------------------------------------------------
   // Render
   // --------------------------------------------------------------------------
-  const conversationArray = Array.from(conversationsMap.entries());
-  console.log('Render: conversationArray length is', conversationArray.length);
-
   return (
     <div className="chat-container">
+      {/* Toast Notifications */}
+      <ToastContainer position="top-right" autoClose={5000} hideProgressBar />
+
       {/* Side Panel: List only the last conversation per inbox ID */}
       {loadingConversations && (
         <div className="loading-indicator">Loading conversations...</div>
       )}
       <div className="conversations-list">
         <ListGroup>
-          {conversationArray.map(([inboxId, conv]) => {
+          {conversations.map(({ inboxId, conv }) => {
             const isActive = selectedConversationId === inboxId;
             const unread = unreadCounts[inboxId] || 0;
 
@@ -447,7 +416,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
                   }
 
                   const content = getDisplayContent(msg);
-                  if (!content) return null; // e.g. read receipts/unsupported
+                  if (!content) return null; // e.g., read receipts/unsupported
 
                   const sentDate = convertSentAtNsToDate(msg.sentAtNs);
                   const myInboxId = xmtpClient.inboxId?.toLowerCase() || '';
@@ -490,7 +459,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
                   }}
                 />
               </Form.Group>
-              <Button variant="primary" onClick={sendMessage}>
+              <Button variant="primary" onClick={sendMessage} disabled={isSendingMessage}>
                 Send
               </Button>
             </div>
