@@ -1,4 +1,4 @@
-# Palket: the Pal-to-Pal market <img src="public/palket.png" alt="logo" width="75"/>
+# Palket: the Pal-to-Pal market <img src="src/assets/palket.png" alt="logo" width="75"/>
 
 ## Project Overview 
 Palket aims to simplify peer-to-peer trading of goods by providing:

@@ -1,0 +1,43 @@
+/* Wiki.css */
+
+.text-receiver {
+    color: #FC343A;
+    font-weight: bold;
+  }
+  
+  .text-sender {
+    color: #FD9155;
+    font-weight: bold;
+  }
+  
+  .img-fluid {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  .border-rounded {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+  }
+  
+  .bg-light-custom {
+    background-color: #f9f9f9;
+  }
+  
+  .bg-white-custom {
+    background-color: #ffffff;
+  }
+  
+  .image-container {
+    position: relative;
+    text-align: center;
+  }
+  
+  .scenario-image {
+    transition: transform 0.2s;
+  }
+  
+  .scenario-image:hover {
+    transform: scale(1.05);
+  }
+  

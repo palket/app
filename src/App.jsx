@@ -1672,7 +1672,6 @@ function App() {
           </Form>
         </Alert>
       )}
-
       {/* Navbar */}
       <Navbar bg="dark" variant="dark" expand="lg">
         <Container fluid>
@@ -1779,7 +1778,7 @@ function App() {
       </Navbar>
 
       {/* Always show the Home tab content (even if not connected) */}
-      {selectedMenu === 'Home' && <Wiki />}
+      {selectedMenu === 'Home' && <Wiki setSelectedMenu={setSelectedMenu} />}
 
       {/* If not connected, show a special alert and connect button. 
           Otherwise, show the other tabs’ content. */}
