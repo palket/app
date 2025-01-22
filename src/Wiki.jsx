@@ -56,22 +56,49 @@ function Wiki({ setSelectedMenu }) {
     sequenceDiagram
       participant Alice as Receiver (Alice)
       participant SC as Palket Contract
-      participant Bob as Potential Sender (Bob)
+      participant Bob as Sender (Bob)
+      participant Charlie as Potential Sender (Charlie)
 
       Alice->>SC: createOfferByReceiver("Need this laptop https://amazon.com/laptop")
-      note right of SC: The contract stores Alice's offer in a "Created" state
+      activate SC
+      SC->>SC: Offer's state updated to "Created"
+      deactivate SC
 
-      Bob->>SC: requestParticipation(offerId, bidPrice)
-      note right of SC: Bob provides a deposit along with his bid
+      Bob->>SC: requestParticipation(AliceOffer, 1000)
+      activate SC
+      SC->>Bob: Request transfer of 500 USDC
+      activate Bob
+      Bob->>SC: Transfer 500 USDC
+      deactivate Bob
+      deactivate SC
 
-      Alice->>SC: chooseParticipant(offerId, Bob)
-      note right of SC: The contract marks Bob as the chosen Sender, <br> and refunds deposits of other participants
+      Charlie->>SC: requestParticipation(AliceOffer, 990)
+      activate SC
+      SC->>Charlie: Request transfer of 495 USDC
+      activate Charlie
+      Charlie->>SC: Transfer 495 USDC
+      deactivate Charlie
+      deactivate SC
 
-      Alice->>SC: finalizeOffer(offerId, Score)
-      note right of SC: After receiving the laptop, Alice confirms the exchange <br> and provides a rating for Bob
+      Alice->>SC: chooseParticipant(AliceOffer, BobAddress)
+      activate SC
+      SC->>Alice: Request transfer of 1500 USDC
+      activate Alice
+      Alice->>SC: Transfer 1500 USDC
+      deactivate Alice
+      SC->>Charlie: Transfer 495 USDC
+      SC->>SC: Offer's state updated to "Accepted"
+      deactivate SC
 
-      SC->>Bob: Transfers the product value (1000 USDC) + deposit (minus any fees)
-      SC->>Alice: Returns her deposit (minus finalize fee)
+      Bob->>Alice: Computer
+
+      Alice->>SC: finalizeOffer(AliceOffer, 5stars)
+      activate SC
+      SC->>Bob: Transfer 1500 USDC
+      SC->>Alice: Transfer 490 USDC
+      SC->>SC: Offer's state updated to "Finalized"
+      deactivate SC
+
   `;
 
   return (
@@ -346,7 +373,7 @@ function Wiki({ setSelectedMenu }) {
                 show={modalShow}
                 handleClose={() => setModalShow(false)}
                 src={potentialScenarios}
-                alt="Potential Scenarios Decision Tree"
+                alt="Potential Scenarios"
               />
             </div>
 
