@@ -48,7 +48,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
         // Sort by timestamp ascending
         fetchedMessages.sort((a, b) => Number(a.sentAtNs) - Number(b.sentAtNs));
 
-        // Deduplicate
+        // Deduplicate and merge new messages into state
         setMessagesByConversation((prev) => {
           const inboxId = conv.dmPeerInboxId ? conv.dmPeerInboxId() : 'unknown';
           const existing = prev[inboxId] || [];
@@ -146,10 +146,20 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   }, [xmtpClient, fetchAllConversations]);
 
   // --------------------------------------------------------------------------
-  // Polling for New Messages
+  // Polling for New Messages (only used if streaming is not available)
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!xmtpClient) return;
+
+    // If the browser SDK supports streaming, skip polling
+    if (
+      xmtpClient.conversations &&
+      typeof xmtpClient.conversations.streamAllMessages === 'function'
+    ) {
+      console.log("Browser SDK supports streaming; skipping polling for new messages.");
+      return;
+    }
+
     let isMounted = true;
 
     const pollNewMessages = async () => {
@@ -209,6 +219,69 @@ const Chat = ({ xmtpClient, targetAddress }) => {
       if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
   }, [xmtpClient, getInboxId, selectedConversationId]);
+
+  // --------------------------------------------------------------------------
+  // Streaming for New Messages (only if supported by browser-sdk)
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (
+      !xmtpClient ||
+      !xmtpClient.conversations ||
+      typeof xmtpClient.conversations.streamAllMessages !== 'function'
+    )
+      return;
+
+    console.log("Starting stream for all messages via browser-sdk...");
+
+    let streamCloser;
+    try {
+      streamCloser = xmtpClient.conversations.streamAllMessages((err, message) => {
+        if (err) {
+          console.error("Stream error:", err);
+          return;
+        }
+        if (!message) return;
+
+        // Determine the inbox id for this message.
+        // Here we assume that if the streamed message includes a nested conversation object,
+        // it provides an 'inboxId' property. Otherwise, fall back to senderInboxId.
+        const inboxId = (message.conversation && message.conversation.inboxId) || message.senderInboxId;
+        if (!inboxId) {
+          console.warn("Streamed message missing conversation inbox id", message);
+          return;
+        }
+
+        // Merge the new message into the proper conversation’s messages (deduplicating by message id)
+        setMessagesByConversation((prev) => {
+          const existing = prev[inboxId] || [];
+          if (existing.find((m) => m.id === message.id)) {
+            return prev; // message already present
+          }
+          return {
+            ...prev,
+            [inboxId]: [...existing, message],
+          };
+        });
+
+        // If the message is for a conversation that is not currently selected,
+        // increase its unread count.
+        if (inboxId !== selectedConversationId) {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [inboxId]: (prev[inboxId] || 0) + 1,
+          }));
+        }
+      });
+    } catch (error) {
+      console.error("Failed to start streamAllMessages:", error);
+    }
+
+    return () => {
+      if (streamCloser && streamCloser.end) {
+        streamCloser.end();
+      }
+    };
+  }, [xmtpClient, selectedConversationId]);
 
   // --------------------------------------------------------------------------
   // Creating or Selecting a DM Conversation Based on targetAddress

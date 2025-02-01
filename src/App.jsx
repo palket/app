@@ -743,8 +743,25 @@ const UserProfile = ({
  =======================*/
 function App() {
   // -- States
-  const [networkEnv, setNetworkEnv] = useState('sepolia');
+  const [networkEnv, setNetworkEnv] = useState('unknown');
   const networkKeys = Object.keys(PalketInfo.networks);
+
+  // Use a fallback object if the networkEnv is not found in PalketInfo
+  const networkConfig = PalketInfo.networks[networkEnv] || {
+    chainId: '0x0',
+    name: 'Unsupported Network',
+    isTestnet: false,
+    currencyName: '',
+    currencySymbol: '',
+    currencyDecimals: 18,
+    rpcUrl: '',
+    blockExplorerUrl: '',
+    palketaddress: '',
+    usdcaddress: '',
+    palketabi: [],
+    usdcabi: [],
+  };
+
   const {
     chainId,
     name: networkName,
@@ -758,7 +775,8 @@ function App() {
     usdcaddress,
     palketabi,
     usdcabi,
-  } = PalketInfo.networks[networkEnv];
+  } = networkConfig;
+
 
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -812,6 +830,53 @@ function App() {
   const [selectedMenu, setSelectedMenu] = useState('Home');
 
   // Effects
+
+  useEffect(() => {
+    async function detectWalletNetwork() {
+      if (window.ethereum) {
+        try {
+          // Request the current chain ID from MetaMask
+          const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+          const chainIdDecimal = parseInt(chainIdHex, 16);
+          const detectedKey = getNetworkKeyForChainId(chainIdDecimal);
+          if (detectedKey) {
+            console.log("Detected wallet network:", detectedKey, chainIdHex);
+            setNetworkEnv(detectedKey);
+          } else {
+            console.warn(`Wallet is connected to an unsupported chain (${chainIdHex}).`);
+            setNetworkEnv('unknown');
+            setMessage({
+              type: 'warning',
+              text: `Your current network (chainId ${chainIdHex}) is not supported by this app. Please switch to a supported network.`,
+            });
+          }
+        } catch (error) {
+          console.error("Error detecting wallet network:", error);
+        }
+      }
+    }
+    detectWalletNetwork();
+  }, []);
+  
+  // Auto-connect wallet on page load if already authorized
+  useEffect(() => {
+    async function autoConnectWallet() {
+      if (window.ethereum && !account) {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts.length > 0) {
+            console.log("Auto-connecting wallet on page load:", accounts[0]);
+            await connectWallet();
+          }
+        } catch (error) {
+          console.error("Error auto-connecting wallet:", error);
+        }
+      }
+    }
+    autoConnectWallet();
+  }, []);
+
+
   useEffect(() => {
     initNetwork();
     if (window.ethereum) {
@@ -827,12 +892,36 @@ function App() {
   }, [networkEnv]);
 
   useEffect(() => {
-    if (marketplaceContract && account) {
-      loadOffers(marketplaceContract);
-      loadUserDescription();
-      loadContractParams();
+    async function reInitialize() {
+      if (!provider || !account || !marketplaceContract) return;
+  
+      // If networkEnv is 'unknown', do not proceed.
+      if (networkEnv === 'unknown') {
+        console.warn("Current network is not supported. Skipping re-initialization.");
+        return;
+      }
+  
+      try {
+        const currentNetwork = await provider.getNetwork();
+        const targetChainDecimal = parseInt(PalketInfo.networks[networkEnv].chainId, 16);
+        if (currentNetwork.chainId === targetChainDecimal) {
+          console.log(`Re-initializing with correct chain: ${currentNetwork.chainId}`);
+          await loadContractParams();
+          await loadOffers(marketplaceContract);
+          await loadUserDescription();
+        } else {
+          console.log(
+            `Skipping loads. currentNetwork.chainId=${currentNetwork.chainId}, expected=${targetChainDecimal}`
+          );
+        }
+      } catch (err) {
+        console.error('Error in reInitialize:', err);
+      }
     }
-  }, [marketplaceContract, account]);
+    reInitialize();
+  }, [provider, account, marketplaceContract, networkEnv]);
+  
+  
 
   useEffect(() => {
     loadUsdcBalance();
@@ -876,11 +965,49 @@ function App() {
     }
   };
 
-  const handleChainChanged = () => {
-    console.log('Chain changed. Reload or handle as needed.');
+  // Helper: get network key from chainId (as decimal)
+  const getNetworkKeyForChainId = (chainIdDecimal) => {
+    const networks = PalketInfo.networks;
+    return Object.keys(networks).find((key) => {
+      // Get the chainId from the network config.
+      // It might be a hex string (like "0xaa36a7") or a decimal string/number.
+      const networkChainId = networks[key].chainId;
+      // Normalize the chainId: if it's a string starting with '0x', parse as hex; otherwise, parse as decimal.
+      const parsedNetworkChainId =
+        typeof networkChainId === 'string'
+          ? parseInt(networkChainId, networkChainId.startsWith('0x') ? 16 : 10)
+          : networkChainId;
+      return parsedNetworkChainId === chainIdDecimal;
+    });
   };
 
+  const handleChainChanged = async (newChainIdHex) => {
+    console.log('Chain changed to:', newChainIdHex);
+    // Option 1: simply reload the page
+    window.location.reload();
+  };
+  
+
+  
+
+  function normalizeChainId(chainId) {
+    // If it’s already 0x-prefixed, assume it’s correct
+    if (chainId.toLowerCase().startsWith('0x')) {
+      return chainId.toLowerCase();
+    }
+    // Otherwise, parse as decimal and convert to 0x-hex
+    const hex = parseInt(chainId, 10).toString(16);
+    return '0x' + hex;
+  }
+
   const switchNetworkIfNeeded = async () => {
+    
+    // If we haven't detected a supported network, don't try switching.
+    if (networkEnv === 'unknown') {
+      console.warn("Unsupported network; skipping network switch.");
+      return;
+    }
+
     if (isSwitchingNetwork) {
       console.log('Network switch already in progress.');
       return;
@@ -900,7 +1027,9 @@ function App() {
 
     try {
       const chainIdCurrent = await window.ethereum.request({ method: 'eth_chainId' });
-      if (chainIdCurrent.toLowerCase() === chainId.toLowerCase()) {
+      // Convert our decimal chainId from PalketInfo to a proper 0x-hex string
+      const targetChainIdHex = normalizeChainId(chainId);
+      if (chainIdCurrent.toLowerCase() === targetChainIdHex.toLowerCase()) {
         // Already on correct network
         setIsSwitchingNetwork(false);
         return;
@@ -908,14 +1037,14 @@ function App() {
       // Attempt switch
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId }],
+        params: [{ chainId: targetChainIdHex }],
       });
     } catch (switchError) {
       console.error('Error switching network:', switchError);
       if (switchError.code === 4902) {
         // Add chain to MetaMask
         const params = {
-          chainId,
+          chainId: targetChainIdHex, // must be 0x-hex
           chainName: networkName,
           rpcUrls: [rpcUrl],
           nativeCurrency: {
@@ -924,6 +1053,7 @@ function App() {
             decimals: parseInt(currencyDecimals),
           },
         };
+          
         if (blockExplorerUrl && blockExplorerUrl.startsWith('https://')) {
           params.blockExplorerUrls = [blockExplorerUrl];
         }
@@ -962,6 +1092,14 @@ function App() {
         setLoading(false);
         return;
       }
+      if (networkEnv === 'unknown') {
+        setMessage({
+          type: 'warning',
+          text: 'Your wallet is connected to an unsupported network. Please switch to a supported network.',
+        });
+        setLoading(false);
+        return;
+      }
       // Attempt network switch
       await switchNetworkIfNeeded();
 
@@ -973,7 +1111,7 @@ function App() {
 
       // Double-check chain
       const chainIdCurrent = await window.ethereum.request({ method: 'eth_chainId' });
-      if (chainIdCurrent.toLowerCase() !== chainId.toLowerCase()) {
+      if (chainIdCurrent.toLowerCase() !== normalizeChainId(chainId).toLowerCase()) {
         setMessage({
           type: 'warning',
           text: `You must switch to ${networkName} to proceed.`,
@@ -991,6 +1129,8 @@ function App() {
       setMarketplaceContract(tempMarketplaceContract);
       setUsdcContract(tempUsdcContract);
       setUsdcDecimals(tempUsdcDecimals);
+
+      console.log("Wallet connected:", tempAccount, "on network:", chainIdCurrent);
 
       // Load data
       await loadOffers(tempMarketplaceContract);
@@ -1630,8 +1770,74 @@ function App() {
 
   // Switch Network from dropdown
   const switchNetwork = async (key) => {
-    setNetworkEnv(key);
+    // Look up the network configuration in your JSON
+    const config = PalketInfo.networks[key];
+    if (!config) {
+      console.error("Network key not found in configuration:", key);
+      setMessage({ type: 'danger', text: `Network configuration not found for ${key}` });
+      return;
+    }
+  
+    // Normalize the chainId to a hex string (wallet expects a 0x-hex string)
+    const targetChainIdHex = normalizeChainId(config.chainId);
+  
+    try {
+      // Request the wallet to switch networks
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: targetChainIdHex }],
+      });
+      // If successful, update the local state so that your app uses the new network config
+      setNetworkEnv(key);
+      setMessage({
+        type: 'info',
+        text: `Switched to ${config.name} (chainId: ${targetChainIdHex}).`,
+      });
+    } catch (error) {
+      // If the error indicates the chain is not added (error code 4902), try to add it
+      if (error.code === 4902) {
+        try {
+          const params = {
+            chainId: targetChainIdHex,
+            chainName: config.name,
+            rpcUrls: [config.rpcUrl],
+            nativeCurrency: {
+              name: config.currencyName,
+              symbol: config.currencySymbol,
+              decimals: parseInt(config.currencyDecimals, 10),
+            },
+            ...(config.blockExplorerUrl && config.blockExplorerUrl.startsWith('https://')
+              ? { blockExplorerUrls: [config.blockExplorerUrl] }
+              : {}),
+          };
+  
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [params],
+          });
+          // After successfully adding, try switching again
+          setNetworkEnv(key);
+          setMessage({
+            type: 'info',
+            text: `Network added and switched to ${config.name} (chainId: ${targetChainIdHex}).`,
+          });
+        } catch (addError) {
+          console.error('Error adding network:', addError);
+          setMessage({
+            type: 'danger',
+            text: `Error adding network: ${addError.message || addError}`,
+          });
+        }
+      } else {
+        console.error('Error switching network:', error);
+        setMessage({
+          type: 'danger',
+          text: `Error switching network: ${error.message || error}`,
+        });
+      }
+    }
   };
+  
 
   // ConfirmTransaction Modal handlers
   const handleConfirmCancel = () => {
