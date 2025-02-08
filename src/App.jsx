@@ -957,13 +957,25 @@ function App() {
 
   const handleAccountsChanged = async (accounts) => {
     if (accounts.length === 0) {
+      // No account connected: clear all account-dependent state.
       setAccount('');
+      setXmtpClient(null);
+      setSelectedProfileAddress('');
       setUsdcBalance(null);
       setNativeBalance(null);
     } else {
-      await connectWallet();
+      const newAccount = accounts[0];
+      // If the new account differs from the current account...
+      if (!account || newAccount.toLowerCase() !== account.toLowerCase()) {
+        // Clear state that is specific to the previous account.
+        setXmtpClient(null);
+        setSelectedProfileAddress(newAccount);
+        // Reinitialize the wallet connection.
+        await connectWallet();
+      }
     }
   };
+  
 
   // Helper: get network key from chainId (as decimal)
   const getNetworkKeyForChainId = (chainIdDecimal) => {
@@ -1095,44 +1107,53 @@ function App() {
       if (networkEnv === 'unknown') {
         setMessage({
           type: 'warning',
-          text: 'Your wallet is connected to an unsupported network. Please switch to a supported network.',
+          text: 'Your wallet is connected to an unsupported network. Please switch to a supported network.'
         });
         setLoading(false);
         return;
       }
-      // Attempt network switch
+      // Attempt network switch if needed.
       await switchNetworkIfNeeded();
-
-      // Request account
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+  
+      // Request accounts.
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const tempAccount = accounts[0];
+      
+      // If the account has changed, clear account-specific state.
+      if (account && tempAccount.toLowerCase() !== account.toLowerCase()) {
+        setXmtpClient(null);
+        setSelectedProfileAddress(tempAccount);
+      }
+      
+      // Create provider, signer, etc.
       const tempProvider = new BrowserProvider(window.ethereum);
       const tempSigner = await tempProvider.getSigner();
-      const tempAccount = await tempSigner.getAddress();
-
-      // Double-check chain
+      
+      // Double-check chain.
       const chainIdCurrent = await window.ethereum.request({ method: 'eth_chainId' });
       if (chainIdCurrent.toLowerCase() !== normalizeChainId(chainId).toLowerCase()) {
         setMessage({
           type: 'warning',
-          text: `You must switch to ${networkName} to proceed.`,
+          text: `You must switch to ${networkName} to proceed.`
         });
         return;
       }
-
+      
       const tempMarketplaceContract = new Contract(palketaddress, palketabi, tempSigner);
       const tempUsdcContract = new Contract(usdcaddress, usdcabi, tempSigner);
       const tempUsdcDecimals = await tempUsdcContract.decimals();
-
+      
+      // Update state.
       setProvider(tempProvider);
       setSigner(tempSigner);
       setAccount(tempAccount);
       setMarketplaceContract(tempMarketplaceContract);
       setUsdcContract(tempUsdcContract);
       setUsdcDecimals(tempUsdcDecimals);
-
+      
       console.log("Wallet connected:", tempAccount, "on network:", chainIdCurrent);
-
-      // Load data
+      
+      // Load account-specific data.
       await loadOffers(tempMarketplaceContract);
       await loadUserDescription();
       handleChatInitialization();
@@ -1140,12 +1161,13 @@ function App() {
       console.error('Error connecting wallet:', error);
       setMessage({
         type: 'danger',
-        text: `Error connecting wallet: ${error.message || error}`,
+        text: `Error connecting wallet: ${error.message || error}`
       });
     } finally {
       setLoading(false);
     }
   };
+  
 
   const changeAccount = async () => {
     try {
