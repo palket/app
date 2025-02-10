@@ -810,10 +810,6 @@ function App() {
   const [currentOfferForChoosing, setCurrentOfferForChoosing] = useState(null);
   const [participants, setParticipants] = useState([]);
 
-  const [showEncryptionModal, setShowEncryptionModal] = useState(false);
-  const [encryptionKeyInput, setEncryptionKeyInput] = useState('');
-  const [generatedKey, setGeneratedKey] = useState('');
-
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAmount, setConfirmAmount] = useState('');
   const [confirmCallback, setConfirmCallback] = useState(null);
@@ -937,7 +933,6 @@ function App() {
   // Handlers
   const onChat = (address) => {
     setCurrentChatAddress(address);
-    handleChatInitialization();
   };
 
   const loadContractParams = async () => {
@@ -1156,7 +1151,7 @@ function App() {
       // Load account-specific data.
       await loadOffers(tempMarketplaceContract);
       await loadUserDescription();
-      handleChatInitialization();
+      await initializeXmtp(tempProvider, tempSigner, tempAccount);
     } catch (error) {
       console.error('Error connecting wallet:', error);
       setMessage({
@@ -1741,14 +1736,20 @@ function App() {
     return new Uint8Array(bytes);
   }
 
-  const initializeXmtp = async (encryptionKey) => {
+  const initializeXmtp = async (localProvider, localSigner, localAccount) => {
     try {
-      if (!provider) throw new Error('No provider found, cannot initialize XMTP.');
-      if (!account) throw new Error('No account found, cannot initialize XMTP.');
+      if (!localProvider) throw new Error('No provider found, cannot initialize XMTP.');
+      if (!localAccount) throw new Error('No account found, cannot initialize XMTP.');
+
+      const randomBytes = new Uint8Array(32);
+      window.crypto.getRandomValues(randomBytes);
+      const hexKey = Array.from(randomBytes, (b) =>
+        b.toString(16).padStart(2, '0')
+      ).join('');
 
       let encryptionBytes;
       try {
-        encryptionBytes = hexToBytes(encryptionKey);
+        encryptionBytes = hexToBytes(hexKey);
       } catch (hexError) {
         console.error('Invalid hex key:', hexError.message);
         alert(`Invalid encryption key: ${hexError.message}`);
@@ -1757,9 +1758,9 @@ function App() {
 
       // XMTP-compatible "signer"
       const xmtpSigner = {
-        getAddress: () => account,
+        getAddress: () => localAccount,
         signMessage: async (message) => {
-          const signature = await signer.signMessage(message);
+          const signature = await localSigner.signMessage(message);
           return toBytes(signature);
         },
       };
@@ -1768,25 +1769,11 @@ function App() {
         env: xmtpEnv,
       });
       setXmtpClient(client);
-      setShowEncryptionModal(false);
+      
+
     } catch (error) {
       console.error('Error initializing XMTP client:', error);
       alert(`XMTP initialization failed: ${error.message}`);
-    }
-  };
-
-  const generateRandomKey = async () => {
-    const randomBytes = new Uint8Array(32);
-    window.crypto.getRandomValues(randomBytes);
-    const hexKey = Array.from(randomBytes, (b) =>
-      b.toString(16).padStart(2, '0')
-    ).join('');
-    setGeneratedKey(hexKey);
-  };
-
-  const handleChatInitialization = () => {
-    if (!xmtpClient) {
-      setShowEncryptionModal(true);
     }
   };
 
@@ -2272,13 +2259,7 @@ function App() {
           {selectedMenu === 'Chat' && (
             <div className="p-3">
               <h4>Chat</h4>
-              {!xmtpClient ? (
-                <Button variant="primary" onClick={handleChatInitialization}>
-                  Start Chat
-                </Button>
-              ) : (
                 <Chat xmtpClient={xmtpClient} targetAddress={currentChatAddress} />
-              )}
             </div>
           )}
 
@@ -2358,73 +2339,6 @@ function App() {
         onConfirm={handleConfirmProceed}
         loading={loading}
       />
-
-      {/* Encryption Key Modal (XMTP) */}
-      <Modal show={showEncryptionModal} onHide={() => setShowEncryptionModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Initialize Chat</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {!generatedKey ? (
-            <>
-              <p>Do you have an existing encryption key?</p>
-              <Form.Label>Enter your encryption key (hex) if you have one:</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Existing encryption key (hex)"
-                value={encryptionKeyInput}
-                onChange={(e) => setEncryptionKeyInput(e.target.value)}
-              />
-              <div className="mt-3">
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (!encryptionKeyInput) {
-                      alert('Please enter a key or choose to create a new one.');
-                      return;
-                    }
-                    initializeXmtp(encryptionKeyInput);
-                  }}
-                >
-                  Use Existing Key
-                </Button>{' '}
-                <Button
-                  variant="secondary"
-                  onClick={async () => {
-                    await generateRandomKey();
-                  }}
-                >
-                  Create New Key
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <Alert variant="info">
-                <strong>Your new encryption key:</strong>
-                <br />
-                {generatedKey}
-              </Alert>
-              <p>
-                Please store this key in a safe place. If you lose it, you cannot recover your
-                previous conversations.
-              </p>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (!generatedKey) {
-                    alert('Key not generated.');
-                    return;
-                  }
-                  initializeXmtp(generatedKey);
-                }}
-              >
-                Proceed with this new key
-              </Button>
-            </>
-          )}
-        </Modal.Body>
-      </Modal>
     </div>
   );
 }
