@@ -36,27 +36,21 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   // --------------------------------------------------------------------------
   // Helper: Return a unique “merge key” for each conversation
   // --------------------------------------------------------------------------
-  // If it’s a DM, we unify by dmPeerInboxId (the peer’s inbox). If it’s a group,
-  // or if dmPeerInboxId is unavailable, we fall back to conv.id.
-  // This way, if the other side starts the same DM from their perspective,
-  // we recognize it as the same conversation (same dmPeerInboxId),
-  // even though the internal conversation.id might differ.
   const getConversationKey = useCallback(async (conv) => {
     try {
-      const possiblePeer = await conv.dmPeerInboxId();
-      if (possiblePeer) {
-        // DM conversation
-        return `dm:${possiblePeer}`;
+      const peerInboxId = await conv.dmPeerInboxId();
+      if (peerInboxId) {
+        // Include the conversation ID to differentiate between different conversation objects.
+        return `dm:${conv.id}:${peerInboxId}`;
       } else {
-        // Group or fallback
         return `grp:${conv.id}`;
       }
     } catch (err) {
-      // fallback to group ID if dmPeerInboxId() fails
       console.warn('Could not get dmPeerInboxId, using conv.id:', err);
       return `grp:${conv.id}`;
     }
   }, []);
+  
 
   // --------------------------------------------------------------------------
   // Compute my own inbox ID (for our account)
@@ -99,6 +93,33 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   }, [getConversationKey]);
 
   // --------------------------------------------------------------------------
+  // Helper to fetch the "display name" for a given "dm:..." key
+  // by calling client.getLatestInboxState(inboxId)
+  // --------------------------------------------------------------------------
+  const getDisplayNameForKey = useCallback(
+    async (key, conv) => {
+      if (key.startsWith('grp:')) {
+        return `Group: ${conv.id}`;
+      }
+      // DM conversation: key format is "dm:<conv.id>:<peerInboxId>"
+      const parts = key.split(':');
+      const peerInboxId = parts[2]; // index 2 holds the peer inbox id
+      try {
+        const inboxState = await xmtpClient.getLatestInboxState(peerInboxId);
+        if (inboxState?.accountAddresses?.length) {
+          return inboxState.accountAddresses[0];
+        }
+        return `DM: ${peerInboxId}`;
+      } catch (err) {
+        console.error('Error getting inbox state:', err);
+        return `DM: ${peerInboxId}`;
+      }
+    },
+    [xmtpClient]
+  );
+  
+
+  // --------------------------------------------------------------------------
   // Gather all conversations, grouping by unique “merge key”
   // Then divide them by consentState: Allowed vs Unknown/Denied
   // --------------------------------------------------------------------------
@@ -108,26 +129,8 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
     try {
       await xmtpClient.conversations.syncAll();
+      await xmtpClient.conversations.sync();
       const all = await xmtpClient.conversations.list();
-      // Next lines are for debugging only
-      console.log('All conversations returned from XMTP:', all);
-      for (const c of all) {
-        try {
-          // Consent state
-          const consent = await c.consentState();
-          // DM peer, if any
-          let dmId;
-          try {
-            dmId = await c.dmPeerInboxId();
-          } catch (e) {
-            dmId = null;
-          }
-          console.log(`Conv id=${c.id}, dmPeerInboxId=${dmId}, consentState=${consent}`);
-        } catch (err) {
-          console.log('Error reading conversation data:', err);
-        }
-      }
-      // End of debugging
 
       // For each conversation, get “merge key” and consentState
       const convData = await Promise.all(
@@ -135,8 +138,10 @@ const Chat = ({ xmtpClient, targetAddress }) => {
           try {
             const key = await getConversationKey(conv);
             const state = await conv.consentState(); // e.g. Allowed/Unknown/Denied
-            console.log('Merging: key=', key, 'consentState=', state, 'convId=', conv.id);
-            return { key, conv, consentState: state };
+            // NEW: Get a displayName from the inbox state
+            const displayName = await getDisplayNameForKey(key, conv);
+
+            return { key, conv, consentState: state, displayName };
           } catch (err) {
             console.warn('Skipping conv due to error:', err);
             return null;
@@ -146,8 +151,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
       const valid = convData.filter(Boolean);
 
-      // Build a map: key -> array of ( conv objects ), because we can have multiple
-      // conversation objects referencing the same dmPeerInboxId or group.
+      // Build a map: key -> array of (conv objects)
       const convoMap = {};
       for (const item of valid) {
         if (!convoMap[item.key]) {
@@ -161,8 +165,6 @@ const Chat = ({ xmtpClient, targetAddress }) => {
       const requestList = [];
 
       // For each key, we might have multiple conv objects with different states
-      // to avoid losing them, we keep the unknown/denied as "requests" and the first
-      // "allowed" as the official conversation. If multiple are Allowed, pick any.
       Object.keys(convoMap).forEach((key) => {
         const variants = convoMap[key];
         // Separate by state
@@ -173,21 +175,21 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
         // If there's at least one Allowed, pick the first one as the "main"
         if (allowed.length > 0) {
-          // Could pick the "newest" or "oldest" if you want
           allowedList.push({
             inboxId: key,
             conv: allowed[0].conv,
             consentState: ConsentState.Allowed,
+            displayName: allowed[0].displayName, // NEW
           });
         }
 
-        // If there are unknown/denied ones, keep them as requests
-        // so we do not lose them
+        // Keep the unknown/denied ones as requests
         unknownOrDenied.forEach((r) => {
           requestList.push({
             inboxId: r.key,
             conv: r.conv,
             consentState: r.consentState,
+            displayName: r.displayName, // NEW
           });
         });
       });
@@ -195,8 +197,11 @@ const Chat = ({ xmtpClient, targetAddress }) => {
       setConversations(allowedList);
       setConversationRequests(requestList);
 
-      // Initialize unread counts for all
-      const allKeys = [...allowedList.map((c) => c.inboxId), ...requestList.map((r) => r.inboxId)];
+      // Initialize unread counts
+      const allKeys = [
+        ...allowedList.map((c) => c.inboxId),
+        ...requestList.map((r) => r.inboxId),
+      ];
       const initialUnread = {};
       for (const k of allKeys) {
         if (typeof initialUnread[k] === 'undefined') {
@@ -219,6 +224,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   }, [
     xmtpClient,
     getConversationKey,
+    getDisplayNameForKey, // NEW
     selectedConversationId,
     fetchMessagesForConversation,
   ]);
@@ -347,31 +353,32 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
         // Compute our “merge key”
         const key = await getConversationKey(convToUse);
-        // Check the conversation’s consentState
         const state = await convToUse.consentState();
+
+        // NEW: Also compute the displayName
+        const displayName = await getDisplayNameForKey(key, convToUse);
 
         // If it’s Allowed, put it in the main “conversations” array,
         // otherwise it goes into “conversationRequests”
         if (state === ConsentState.Allowed) {
           setConversations((prev) => {
-            // Maybe we already have an entry for that key
             const idx = prev.findIndex((c) => c.inboxId === key);
             if (idx >= 0) {
               const copy = [...prev];
-              copy[idx] = { inboxId: key, conv: convToUse, consentState: state };
+              copy[idx] = { inboxId: key, conv: convToUse, consentState: state, displayName };
               return copy;
             }
-            return [...prev, { inboxId: key, conv: convToUse, consentState: state }];
+            return [...prev, { inboxId: key, conv: convToUse, consentState: state, displayName }];
           });
         } else {
           setConversationRequests((prev) => {
             const idx = prev.findIndex((r) => r.inboxId === key);
             if (idx >= 0) {
               const copy = [...prev];
-              copy[idx] = { inboxId: key, conv: convToUse, consentState: state };
+              copy[idx] = { inboxId: key, conv: convToUse, consentState: state, displayName };
               return copy;
             }
-            return [...prev, { inboxId: key, conv: convToUse, consentState: state }];
+            return [...prev, { inboxId: key, conv: convToUse, consentState: state, displayName }];
           });
         }
 
@@ -387,7 +394,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
     };
 
     initiateChat();
-  }, [targetAddress, xmtpClient, getConversationKey, fetchMessagesForConversation]);
+  }, [targetAddress, xmtpClient, getConversationKey, getDisplayNameForKey, fetchMessagesForConversation]);
 
   // --------------------------------------------------------------------------
   // Accept a conversation request: update to Allowed
@@ -455,7 +462,6 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   // Manually Select a Conversation (Allowed or Request)
   // --------------------------------------------------------------------------
   const selectConversation = useCallback(async (inboxId) => {
-    // Could be in main or requests
     const convObj =
       conversations.find((c) => c.inboxId === inboxId) ||
       conversationRequests.find((c) => c.inboxId === inboxId);
@@ -495,17 +501,15 @@ const Chat = ({ xmtpClient, targetAddress }) => {
   return (
     <div className="chat-container">
       <ToastContainer position="top-right" autoClose={5000} hideProgressBar />
-
-      {loadingConversations && (
-        <div className="loading-indicator">
-          <Spinner animation="border" size="sm" /> Loading conversations...
-        </div>
-      )}
-
       <div className="conversations-list">
-        <h5>Conversations (Allowed)</h5>
+        {loadingConversations && (
+          <div className="loading-indicator">
+            <Spinner animation="border" size="sm" /> 
+          </div>
+        )}
+        <h5>Conversations</h5>
         <ListGroup>
-          {conversations.map(({ inboxId }) => {
+          {conversations.map(({ inboxId, displayName }) => {
             const isActive = selectedConversationId === inboxId;
             const unread = unreadCounts[inboxId] || 0;
             return (
@@ -516,7 +520,8 @@ const Chat = ({ xmtpClient, targetAddress }) => {
                 onClick={() => selectConversation(inboxId)}
                 className="d-flex justify-content-between align-items-center"
               >
-                {inboxId}
+                {/* Instead of showing `inboxId`, we show `displayName` */}
+                {displayName}
                 {unread > 0 && <Badge bg="primary">{unread}</Badge>}
               </ListGroup.Item>
             );
@@ -525,9 +530,9 @@ const Chat = ({ xmtpClient, targetAddress }) => {
 
         {conversationRequests.length > 0 && (
           <>
-            <h5 className="mt-4">Requests (Unknown / Denied)</h5>
+            <h5 className="mt-4">Requests</h5>
             <ListGroup>
-              {conversationRequests.map(({ inboxId, consentState }) => {
+              {conversationRequests.map(({ inboxId, consentState, displayName }) => {
                 const isActive = selectedConversationId === inboxId;
                 const unread = unreadCounts[inboxId] || 0;
                 return (
@@ -539,7 +544,7 @@ const Chat = ({ xmtpClient, targetAddress }) => {
                     className="d-flex justify-content-between align-items-center"
                   >
                     <div>
-                      {inboxId}
+                      {displayName}
                       {consentState === ConsentState.Denied && (
                         <Badge bg="danger" className="ms-2">
                           Denied

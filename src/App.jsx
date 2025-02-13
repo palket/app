@@ -48,7 +48,7 @@ import Wiki from './Wiki';
 
 // Removed React Router usage to simplify
 
-const xmtpEnv = 'production';
+const xmtpEnv = 'production'; // 'dev' / 'production'
 
 /** =====================
  *    Helper Components
