@@ -8,6 +8,8 @@ import {
   formatUnits,
   toBigInt as ethersToBigInt, // Renamed to avoid conflict
   isAddress as ethersIsAddress,
+  keccak256,
+  getBytes,
 } from 'ethers';
 import PalketInfo from './palketInfo.json';
 
@@ -46,7 +48,7 @@ import Wiki from './Wiki';
 
 // Removed React Router usage to simplify
 
-const xmtpEnv = 'dev';
+const xmtpEnv = 'production';
 
 /** =====================
  *    Helper Components
@@ -1736,27 +1738,31 @@ function App() {
     return new Uint8Array(bytes);
   }
 
+  async function generateEncryptionBytes(localSigner, localAccount) {
+    // 1. Deterministic seed message
+    const seedMessage = `XMTP key seed for address: ${localAccount}`;
+  
+    // 2. User signs the seed message
+    const rawSignature = await localSigner.signMessage(seedMessage);
+  
+    // 3. Hash the signature (keccak256) -> 32 bytes
+    //    ethers.utils.keccak256 returns a hex string (0x...).
+    //    Convert that hex string to a Uint8Array/Bytes
+    const hashedSignature = keccak256(rawSignature);
+    const encryptionBytes = getBytes(hashedSignature);
+    console.log("Palket rocks! ", encryptionBytes);
+    return encryptionBytes;
+  }
+
   const initializeXmtp = async (localProvider, localSigner, localAccount) => {
     try {
       if (!localProvider) throw new Error('No provider found, cannot initialize XMTP.');
       if (!localAccount) throw new Error('No account found, cannot initialize XMTP.');
 
-      const randomBytes = new Uint8Array(32);
-      window.crypto.getRandomValues(randomBytes);
-      const hexKey = Array.from(randomBytes, (b) =>
-        b.toString(16).padStart(2, '0')
-      ).join('');
+      // 1. Generate repeatable encryption bytes via signature + hash
+      const encryptionBytes = await generateEncryptionBytes(localSigner, localAccount);
 
-      let encryptionBytes;
-      try {
-        encryptionBytes = hexToBytes(hexKey);
-      } catch (hexError) {
-        console.error('Invalid hex key:', hexError.message);
-        alert(`Invalid encryption key: ${hexError.message}`);
-        return;
-      }
-
-      // XMTP-compatible "signer"
+      // 2. XMTP-compatible “signer”
       const xmtpSigner = {
         getAddress: () => localAccount,
         signMessage: async (message) => {
@@ -1765,6 +1771,7 @@ function App() {
         },
       };
 
+      // 3. Create the XMTP client
       const client = await Client.create(xmtpSigner, encryptionBytes, {
         env: xmtpEnv,
       });
