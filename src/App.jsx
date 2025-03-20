@@ -518,11 +518,13 @@ const UserProfile = ({
   const [userOffersAsReceiver, setUserOffersAsReceiver] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [pendingWithdrawal, setPendingWithdrawal] = useState(null);
 
   useEffect(() => {
     if (marketplaceContract && userAddress) {
       fetchUserInfo();
       fetchUserOffers();
+      loadPendingWithdrawal();
     }
   }, [marketplaceContract, userAddress]);
 
@@ -606,6 +608,34 @@ const UserProfile = ({
     }
   };
 
+  const loadPendingWithdrawal = async () => {
+    try {
+      const pending = await marketplaceContract.pendingWithdrawals(userAddress);
+      const formatted = parseFloat(formatUnits(pending, usdcDecimals)).toFixed(2);
+      setPendingWithdrawal(formatted);
+    } catch (error) {
+      console.error('Error loading pending withdrawals:', error);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    try {
+      setLoading(true);
+      const tx = await marketplaceContract.withdrawFunds();
+      await tx.wait();
+      setMessage({ type: 'success', text: 'Withdrawal successful!' });
+      setPendingWithdrawal('0.00');
+    } catch (error) {
+      console.error('Error withdrawing funds:', error);
+      setMessage({
+        type: 'danger',
+        text: 'Error withdrawing funds: ' + (error.reason || error.message),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Container className="mt-4">
       {message && (
@@ -651,13 +681,25 @@ const UserProfile = ({
                     {userProfile.numOffersFinalizedAsSender}
                   </p>
                   {userAddress.toLowerCase() === account.toLowerCase() && (
-                    <Button
-                      variant="primary"
-                      onClick={() => setShowDescriptionModal(true)}
-                      className="mt-3"
-                    >
-                      Set Description
-                    </Button>
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() => setShowDescriptionModal(true)}
+                        className="mt-3"
+                      >
+                        Set Description
+                      </Button>
+                      {pendingWithdrawal && parseFloat(pendingWithdrawal) > 0 && (
+                        <div className="mt-3">
+                          <p>
+                            <strong>Pending Withdrawals:</strong> {pendingWithdrawal} USDC
+                          </p>
+                          <Button variant="warning" onClick={handleWithdraw} disabled={loading}>
+                            {loading ? <Spinner animation="border" size="sm" /> : 'Withdraw Funds'}
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -997,6 +1039,18 @@ function App() {
   };
   
 
+  async function ensureAllowance(tokenContract, spender, requiredAmount) {
+    const currentAllowance = await tokenContract.allowance(account, spender);
+    console.log('Current allowance:', currentAllowance);
+    console.log('Required amount:', requiredAmount);
+    
+    const currentAllowanceBigInt = BigInt(currentAllowance.toString());
+    console.log('Allowance change needed?:', currentAllowanceBigInt < requiredAmount);
+    if (currentAllowanceBigInt < requiredAmount) {
+      const approveTx = await tokenContract.approve(spender, requiredAmount);
+      await approveTx.wait();
+    }
+  }
   
 
   function normalizeChainId(chainId) {
@@ -1165,25 +1219,6 @@ function App() {
     }
   };
   
-
-  const changeAccount = async () => {
-    try {
-      if (window.ethereum) {
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-      } else {
-        setMessage({
-          type: 'danger',
-          text: 'MetaMask is not installed.',
-        });
-      }
-    } catch (error) {
-      console.error('Error changing account:', error);
-      setMessage({
-        type: 'danger',
-        text: 'Error changing account: ' + (error.reason || error.message),
-      });
-    }
-  };
 
   const loadUsdcBalance = async () => {
     try {
@@ -1373,9 +1408,14 @@ function App() {
 
         // Check deposit from contract
         const dp = await marketplaceContract.depositPercentage(); // e.g. 50
+        const dp3 = await marketplaceContract.usdcToken();
+        
+
         const deposit = (valueInBigInt * BigInt(dp)) / BigInt(100);
         const depositUSDC = parseFloat(formatUnits(deposit, usdcDecimals)).toFixed(2);
-
+        console.log(productValueString);
+        console.log(dp);
+        console.log(dp3);
         // Show confirmation for deposit
         setConfirmAmount(depositUSDC);
         setShowConfirmModal(true);
@@ -1385,11 +1425,9 @@ function App() {
           setLoading(true);
 
           // Approve if needed
-          const currentAllowance = await usdcContract.allowance(account, palketaddress);
-          if (currentAllowance < deposit) {
-            const approveTx = await usdcContract.approve(palketaddress, deposit);
-            await approveTx.wait();
-          }
+          console.log(dp);
+          await ensureAllowance(usdcContract, palketaddress, deposit);
+          console.log(dp);
 
           const tx = await marketplaceContract.createOfferBySender(
             productDescription,
@@ -1542,49 +1580,46 @@ function App() {
       setLoading(true);
       const offer = currentOfferForParticipation;
       let totalAmount;
-
+  
       if (offer.offerType === 0) {
-        // ReceiverInitiated => user provides bidPrice + deposit
-        const bidInWei = parseUnits(bidValue, usdcDecimals);
+        // ReceiverInitiated: force bidValue to be an integer by flooring it
+        const bidValueNumber = Math.floor(parseFloat(bidValue));
+        const bidValueInt = bidValueNumber.toString(); // Use this for the contract call
+  
+        // Use the floored value to calculate deposit (converted to base units)
+        const bidInWei = parseUnits(bidValueInt, usdcDecimals);
         const dp = await marketplaceContract.depositPercentage();
         const deposit = (ethersToBigInt(bidInWei) * BigInt(dp)) / BigInt(100);
         totalAmount = deposit;
+  
+        // Update bidValue to the integer version for contract call later
+        bidValue = bidValueInt;
+
+
       } else {
-        // SenderInitiated => user must lock productValue + deposit
-        totalAmount = offer.productValue + offer.deposit;
+        // SenderInitiated: user must lock productValue + deposit
+        totalAmount = ethersToBigInt(offer.productValue + offer.deposit);
       }
-
+  
       const totalUSDC = parseFloat(formatUnits(totalAmount, usdcDecimals)).toFixed(2);
-
+  
       // Show confirm modal
       setConfirmAmount(totalUSDC);
       setShowConfirmModal(true);
-
+  
       setConfirmCallback(() => async () => {
         setLoading(true);
-
-        // Approve
-        const allowance = await usdcContract.allowance(account, palketaddress);
-        if (allowance < totalAmount) {
-          const approveTx = await usdcContract.approve(palketaddress, totalAmount);
-          await approveTx.wait();
-        }
-
-        // XMTP: Provide consent to counterpart user
-        await xmtpClient.setConsentStates([
-          {
-            entity: offer.offerType === 0 ? offer.receiver : offer.sender,
-            entityType: ConsentEntityType.Address,
-            state: ConsentState.allowed,
-          },
-        ]);
-
+  
+        // Approve if needed, converting allowance to BigInt for comparison
+        await ensureAllowance(usdcContract, palketaddress, totalAmount);
+  
+        // Use the integer bid value for the contract call
         const tx = await marketplaceContract.requestParticipation(
           offer.offerId,
           offer.offerType === 0 ? bidValue : 0
         );
         await tx.wait();
-
+  
         setMessage({ type: 'success', text: 'Participation requested successfully!' });
         setShowRequestModal(false);
         setCurrentOfferForParticipation(null);
@@ -1602,6 +1637,7 @@ function App() {
       setLoading(false);
     }
   };
+  
 
   const canChooseParticipantForOffer = async (offer) => {
     setCurrentOfferForChoosing(offer);
@@ -1617,6 +1653,7 @@ function App() {
       while (true) {
         try {
           const p = await marketplaceContract.participationRequests(offerId, i);
+          console.error('Test test1');
           const applicant = p[0];
           const bidPrice = Number(p[2]);
           const bidPriceFormatted =
@@ -1629,7 +1666,9 @@ function App() {
           break;
         }
       }
+      console.error('Test test2');
       setParticipants(arr);
+      console.error('Test test3');
     } catch (error) {
       console.error('Error loading participants:', error);
       setMessage({
@@ -1646,9 +1685,9 @@ function App() {
       setLoading(true);
       const offerId = currentOfferForChoosing.offerId;
       let totalAmount = 0n;
-
+  
       if (currentOfferForChoosing.offerType === 0) {
-        // ReceiverInitiated => receiver must lock P+D for chosen participant
+        // ReceiverInitiated: receiver must lock P+D for chosen participant
         const chosenPart = participants.find(
           (p) => p.applicant.toLowerCase() === participantAddress.toLowerCase()
         );
@@ -1656,40 +1695,30 @@ function App() {
           setMessage({ type: 'danger', text: 'Chosen participant not found.' });
           return;
         }
-        const bidWei = parseUnits(chosenPart.bidPrice.toString(), usdcDecimals);
+        // Floor the bid price value (which came as a formatted string) to ensure an integer
+        const bidPriceNumber = Math.floor(parseFloat(chosenPart.bidPrice));
+        const bidWei = parseUnits(bidPriceNumber.toString(), usdcDecimals);
         const dp = await marketplaceContract.depositPercentage();
         const deposit = (ethersToBigInt(bidWei) * BigInt(dp)) / BigInt(100);
         totalAmount = bidWei + deposit;
       } else {
-        // SenderInitiated => no extra from the sender to choose
+        // SenderInitiated: no extra USDC required from the chooser
         totalAmount = 0n;
       }
-
+  
       const totalUSDC = parseFloat(formatUnits(totalAmount, usdcDecimals)).toFixed(2);
-
+  
       if (totalAmount > 0n) {
         setConfirmAmount(totalUSDC);
         setShowConfirmModal(true);
         setConfirmCallback(() => async () => {
           setLoading(true);
-          const allowance = await usdcContract.allowance(account, palketaddress);
-          if (allowance < totalAmount) {
-            const approveTx = await usdcContract.approve(palketaddress, totalAmount);
-            await approveTx.wait();
-          }
-
-          // XMTP: Provide Consent
-          await xmtpClient.setConsentStates([
-            {
-              entity: participantAddress,
-              entityType: ConsentEntityType.Address,
-              state: ConsentState.Allowed,
-            },
-          ]);
-
+          // Convert allowance to BigInt for comparison
+          await ensureAllowance(usdcContract, palketaddress, totalAmount);
+  
           const tx = await marketplaceContract.chooseParticipant(offerId, participantAddress);
           await tx.wait();
-
+  
           setMessage({ type: 'success', text: 'Participant chosen successfully!' });
           setShowChooseModal(false);
           setCurrentOfferForChoosing(null);
@@ -1702,7 +1731,7 @@ function App() {
         // No extra USDC transfer from the chooser
         const tx = await marketplaceContract.chooseParticipant(offerId, participantAddress);
         await tx.wait();
-
+  
         setMessage({ type: 'success', text: 'Participant chosen successfully!' });
         setShowChooseModal(false);
         setCurrentOfferForChoosing(null);
@@ -1721,6 +1750,7 @@ function App() {
       setLoading(false);
     }
   };
+  
 
   // XMTP / Chat
   // Convert hex key to bytes
@@ -1871,6 +1901,26 @@ function App() {
     setConfirmCallback(null);
   };
 
+  function formatBalance(value) {
+    const num = Number(value);
+
+    if (isNaN(num)) {
+        return "NaN";
+    }
+
+    if (num >= 1e6) {
+        return `${(num / 1e6).toFixed(2)} MUSDC`;
+    } else if (num >= 1e3) {
+        return `${(num / 1e3).toFixed(2)} kUSDC`;
+    } else if (num >= 1) {
+        return `${num.toFixed(2)} USDC`;
+    } else {
+        return num.toExponential(2) + ' USDC';
+    }
+}
+
+
+
   return (
     <div>
       {isTestnet === '1' && (
@@ -1960,26 +2010,7 @@ function App() {
               </Nav.Link>
             </Nav>
 
-            <Nav className="ms-auto align-items-center">
-              <div className="text-center me-3">
-                <div style={{ fontWeight: 'bold' }}>
-                  {account
-                    ? `Account: ${account.substring(0, 6)}...${account.substring(account.length - 4)}`
-                    : 'Not connected'}
-                </div>
-                {account && (
-                  <div>
-                    <div>
-                      {nativeBalance !== null
-                        ? `${nativeBalance} ${currencySymbol}`
-                        : '...'}
-                    </div>
-                    <div>
-                      {usdcBalance !== null ? `${usdcBalance} USDC` : '...'}
-                    </div>
-                  </div>
-                )}
-              </div>
+            <Nav >
               {/* Use the current network's name instead of "Network" */}
               <NavDropdown title={networkName} id="network-dropdown" className="me-3">
                 {networkKeys.map((key) => (
@@ -1990,9 +2021,17 @@ function App() {
               </NavDropdown>
               <Button
                 variant="outline-light"
-                onClick={account ? changeAccount : connectWallet}
+                onClick={account ?  {} : connectWallet }
               >
-                {account ? 'Change Account' : 'Connect'}
+                {account ? (
+                  <div className="flex flex-col" style={{ fontSize: '12px' }}>
+                    <div>{`${account.slice(0, 6)}...${account.slice(-4)}`}</div>
+                    <div>{usdcBalance !== null ? formatBalance(usdcBalance) : '...'}</div>
+                    <div>{nativeBalance !== null ? formatBalance(nativeBalance).replace('USDC', currencySymbol) : '...'}</div>
+                  </div>
+                ) : (
+                  'Connect'
+                )}
               </Button>
             </Nav>
           </Navbar.Collapse>
