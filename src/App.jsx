@@ -150,7 +150,7 @@ const ChooseParticipantModal = ({
               {participants.map((p, idx) => (
                 <option key={idx} value={p.applicant}>
                   {p.applicant.substring(0, 6)}...{p.applicant.substring(p.applicant.length - 4)} |{' '}
-                  {p.bidPrice > 0 ? ` Bid: ${p.bidPrice} USDC` : ''}
+                  {p.bidPriceDisplay > 0 ? ` Bid: ${p.bidPriceDisplay} USDC` : ''}
                 </option>
               ))}
             </Form.Control>
@@ -283,7 +283,7 @@ const RequestParticipationModal = ({
             <Form.Label>Your Bid Price (USDC)</Form.Label>
             <Form.Control
               type="number"
-              placeholder="Enter your proposed price"
+              placeholder="Enter your proposed price (in base units)"
               min="0.01"
               step="0.01"
               value={bidValue}
@@ -502,7 +502,6 @@ const OfferCard = ({
   );
 };
 
-// UserProfile (New)
 const UserProfile = ({
   marketplaceContract,
   usdcDecimals,
@@ -845,6 +844,7 @@ function App() {
   const [mintAmount, setMintAmount] = useState('');
   const [mintRecipient, setMintRecipient] = useState('');
   const [mintLoading, setMintLoading] = useState(false);
+  const [forfeitureDuration, setForfeitureDuration] = useState(0);
 
   const [xmtpClient, setXmtpClient] = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -983,6 +983,8 @@ function App() {
     try {
       const dp = await marketplaceContract.depositPercentage();
       const ff = await marketplaceContract.finalizeFeePercentage();
+      const fD = await marketplaceContract.forfeitureDuration();
+      setForfeitureDuration(Number(fD));
       setDepositPercentage(Number(dp));
       setFinalizeFeePercentage(Number(ff));
     } catch (error) {
@@ -1038,21 +1040,20 @@ function App() {
     window.location.reload();
   };
   
-
   async function ensureAllowance(tokenContract, spender, requiredAmount) {
     const currentAllowance = await tokenContract.allowance(account, spender);
-    console.log('Current allowance:', currentAllowance);
-    console.log('Required amount:', requiredAmount);
-    
-    const currentAllowanceBigInt = BigInt(currentAllowance.toString());
-    console.log('Allowance change needed?:', currentAllowanceBigInt < requiredAmount);
-    if (currentAllowanceBigInt < requiredAmount) {
+    console.log("Current allowance (base units):", currentAllowance.toString());
+    const bigAllowance = BigInt(currentAllowance.toString());
+  
+    console.log("Allowance change needed?:", bigAllowance < requiredAmount);
+  
+    // Compare as BigInt:
+    if (bigAllowance < requiredAmount) {
       const approveTx = await tokenContract.approve(spender, requiredAmount);
       await approveTx.wait();
     }
   }
   
-
   function normalizeChainId(chainId) {
     // If it’s already 0x-prefixed, assume it’s correct
     if (chainId.toLowerCase().startsWith('0x')) {
@@ -1254,6 +1255,7 @@ function App() {
     }
   };
 
+  // UPDATED: Now assume mintAmount is provided in base units directly
   const handleMintUSDC = async (e) => {
     e.preventDefault();
     try {
@@ -1262,7 +1264,8 @@ function App() {
         return;
       }
       const recipient = mintRecipient.trim() === '' ? account : mintRecipient.trim();
-      const amountInWei = parseUnits(mintAmount, usdcDecimals);
+      // Directly use the mintAmount string (which should be in base units)
+      const amountInWei = mintAmount.toString();
 
       setMintLoading(true);
       const tx = await usdcContract.mint(recipient, amountInWei);
@@ -1402,20 +1405,16 @@ function App() {
           return;
         }
 
-        const productValueString = productValue.toString();
-        const valueInWei = parseUnits(productValueString, usdcDecimals);
-        const valueInBigInt = ethersToBigInt(valueInWei);
+        // UPDATED: Assume productValue is already in base units
+        const productValueWei = parseUnits(productValue, usdcDecimals);
 
         // Check deposit from contract
         const dp = await marketplaceContract.depositPercentage(); // e.g. 50
-        const dp3 = await marketplaceContract.usdcToken();
         
-
-        const deposit = (valueInBigInt * BigInt(dp)) / BigInt(100);
-        const depositUSDC = parseFloat(formatUnits(deposit, usdcDecimals)).toFixed(2);
-        console.log(productValueString);
+        const deposit = (productValueWei * BigInt(dp)) / BigInt(100);
+        const depositUSDC = parseFloat(formatUnits(deposit.toString(), usdcDecimals)).toFixed(2);
+        console.log(productValueWei);
         console.log(dp);
-        console.log(dp3);
         // Show confirmation for deposit
         setConfirmAmount(depositUSDC);
         setShowConfirmModal(true);
@@ -1425,13 +1424,11 @@ function App() {
           setLoading(true);
 
           // Approve if needed
-          console.log(dp);
           await ensureAllowance(usdcContract, palketaddress, deposit);
-          console.log(dp);
 
           const tx = await marketplaceContract.createOfferBySender(
             productDescription,
-            productValueString
+            productValueWei
           );
           await tx.wait();
 
@@ -1547,7 +1544,7 @@ function App() {
       const expiredOffers = allOffers.filter(
         (offer) =>
           offer.state === 1 &&
-          offer.acceptanceTime + 180 * 24 * 60 * 60 <= currentTime
+          offer.acceptanceTime + forfeitureDuration * 24 * 60 * 60 <= currentTime
       );
       if (expiredOffers.length === 0) {
         setMessage({ type: 'info', text: 'No expired offers to forfeit.' });
@@ -1582,26 +1579,21 @@ function App() {
       let totalAmount;
   
       if (offer.offerType === 0) {
-        // ReceiverInitiated: force bidValue to be an integer by flooring it
-        const bidValueNumber = Math.floor(parseFloat(bidValue));
-        const bidValueInt = bidValueNumber.toString(); // Use this for the contract call
-  
-        // Use the floored value to calculate deposit (converted to base units)
-        const bidInWei = parseUnits(bidValueInt, usdcDecimals);
+        // UPDATED: Assume bidValue is already in base units.
+        const bidValueWei = parseUnits(bidValue, usdcDecimals); 
         const dp = await marketplaceContract.depositPercentage();
-        const deposit = (ethersToBigInt(bidInWei) * BigInt(dp)) / BigInt(100);
+        const deposit = (bidValueWei * BigInt(dp)) / BigInt(100);
         totalAmount = deposit;
   
-        // Update bidValue to the integer version for contract call later
-        bidValue = bidValueInt;
-
-
+        // Update bidValue for the contract call
+        bidValue = bidValueWei;
+  
       } else {
-        // SenderInitiated: user must lock productValue + deposit
-        totalAmount = ethersToBigInt(offer.productValue + offer.deposit);
+        // SenderInitiated: user must lock productValue + deposit (already in base units)
+        totalAmount = BigInt(offer.productValue) + BigInt(offer.deposit);
       }
   
-      const totalUSDC = parseFloat(formatUnits(totalAmount, usdcDecimals)).toFixed(2);
+      const totalUSDC = parseFloat(formatUnits(totalAmount.toString(), usdcDecimals)).toFixed(2);
   
       // Show confirm modal
       setConfirmAmount(totalUSDC);
@@ -1610,10 +1602,10 @@ function App() {
       setConfirmCallback(() => async () => {
         setLoading(true);
   
-        // Approve if needed, converting allowance to BigInt for comparison
+        // Approve if needed
         await ensureAllowance(usdcContract, palketaddress, totalAmount);
   
-        // Use the integer bid value for the contract call
+        // Use the bidValue for the contract call (if ReceiverInitiated)
         const tx = await marketplaceContract.requestParticipation(
           offer.offerId,
           offer.offerType === 0 ? bidValue : 0
@@ -1653,22 +1645,23 @@ function App() {
       while (true) {
         try {
           const p = await marketplaceContract.participationRequests(offerId, i);
-          console.error('Test test1');
           const applicant = p[0];
           const bidPrice = Number(p[2]);
           const bidPriceFormatted =
             bidPrice > 0
-              ? parseFloat(formatUnits(bidPrice, usdcDecimals)).toFixed(2)
+              ? parseFloat(formatUnits(p[2], usdcDecimals)).toFixed(2)
               : 0;
-          arr.push({ applicant, bidPrice: bidPriceFormatted });
+          arr.push({
+            applicant,
+            bidPrice: bidPrice,
+            bidPriceDisplay: bidPriceFormatted,
+          });
           i++;
         } catch (error) {
           break;
         }
       }
-      console.error('Test test2');
       setParticipants(arr);
-      console.error('Test test3');
     } catch (error) {
       console.error('Error loading participants:', error);
       setMessage({
@@ -1687,7 +1680,7 @@ function App() {
       let totalAmount = 0n;
   
       if (currentOfferForChoosing.offerType === 0) {
-        // ReceiverInitiated: receiver must lock P+D for chosen participant
+        // UPDATED: Assume bidPrice is already in base units.
         const chosenPart = participants.find(
           (p) => p.applicant.toLowerCase() === participantAddress.toLowerCase()
         );
@@ -1695,25 +1688,22 @@ function App() {
           setMessage({ type: 'danger', text: 'Chosen participant not found.' });
           return;
         }
-        // Floor the bid price value (which came as a formatted string) to ensure an integer
-        const bidPriceNumber = Math.floor(parseFloat(chosenPart.bidPrice));
-        const bidWei = parseUnits(bidPriceNumber.toString(), usdcDecimals);
+        const bidWei = BigInt(chosenPart.bidPrice);
         const dp = await marketplaceContract.depositPercentage();
-        const deposit = (ethersToBigInt(bidWei) * BigInt(dp)) / BigInt(100);
+        const deposit = (bidWei * BigInt(dp)) / BigInt(100);
         totalAmount = bidWei + deposit;
       } else {
         // SenderInitiated: no extra USDC required from the chooser
         totalAmount = 0n;
       }
   
-      const totalUSDC = parseFloat(formatUnits(totalAmount, usdcDecimals)).toFixed(2);
+      const totalUSDC = parseFloat(formatUnits(totalAmount.toString(), usdcDecimals)).toFixed(2);
   
       if (totalAmount > 0n) {
         setConfirmAmount(totalUSDC);
         setShowConfirmModal(true);
         setConfirmCallback(() => async () => {
           setLoading(true);
-          // Convert allowance to BigInt for comparison
           await ensureAllowance(usdcContract, palketaddress, totalAmount);
   
           const tx = await marketplaceContract.chooseParticipant(offerId, participantAddress);
@@ -1728,7 +1718,6 @@ function App() {
           await loadNativeBalance();
         });
       } else {
-        // No extra USDC transfer from the chooser
         const tx = await marketplaceContract.chooseParticipant(offerId, participantAddress);
         await tx.wait();
   
@@ -1930,7 +1919,7 @@ function App() {
             <Form.Group controlId="mintAmount" className="mb-0 me-2">
               <Form.Control
                 type="number"
-                placeholder="Amount to Mint (USDC)"
+                placeholder="Amount to Mint (USDC in base units)"
                 value={mintAmount}
                 onChange={(e) => setMintAmount(e.target.value)}
                 min="0"
@@ -2168,7 +2157,7 @@ function App() {
                 </Form.Group>
 
                 <Form.Group controlId="productValue" className="mt-2">
-                  <Form.Label>Product Value (USDC)</Form.Label>
+                  <Form.Label>Product Value (USDC in base units)</Form.Label>
                   <Form.Control
                     type="number"
                     name="productValue"
@@ -2238,7 +2227,7 @@ function App() {
               <h5>Lottery</h5>
               <Alert variant="secondary">
                 Offers that remain <strong>Accepted</strong> but are never finalized for too long
-                (e.g. 180 days) can be <strong>forfeited</strong>. Part of the funds go to the
+                can be <strong>forfeited</strong>. Part of the funds go to the
                 caller, part to the contract owner, and the rest to a random participant.
               </Alert>
 
@@ -2254,7 +2243,7 @@ function App() {
               {allOffers.filter(
                 (offer) =>
                   offer.state === 1 &&
-                  offer.acceptanceTime + 180 * 24 * 60 * 60 <=
+                  offer.acceptanceTime + forfeitureDuration * 24 * 60 * 60 <=
                     Math.floor(Date.now() / 1000)
               ).length > 0 ? (
                 <Row className="g-4 mt-2">
@@ -2262,7 +2251,7 @@ function App() {
                     .filter(
                       (offer) =>
                         offer.state === 1 &&
-                        offer.acceptanceTime + 180 * 24 * 60 * 60 <=
+                        offer.acceptanceTime + forfeitureDuration * 24 * 60 * 60 <=
                           Math.floor(Date.now() / 1000)
                     )
                     .map((offer, index) => (
