@@ -12,6 +12,7 @@ mermaid.initialize({
   startOnLoad: false,
   theme: 'default',
   securityLevel: 'loose',
+  fontSize: 40
 });
 
 // Reusable MermaidChart component
@@ -33,6 +34,21 @@ function MermaidChart({ chart }) {
   return <div ref={containerRef} className="mermaid" />;
 }
 
+function ChartModal({ show, handleClose, chart, title = 'Zoomed Diagram' }) {
+  return (
+    <Modal show={show} onHide={handleClose} size="lg" centered>
+      <Modal.Header closeButton>
+        <Modal.Title>{title}</Modal.Title>
+      </Modal.Header>
+      <Modal.Body className="text-center">
+        <div style={{ overflowX: 'auto' }}>
+          <MermaidChart chart={chart} />
+        </div>
+      </Modal.Body>
+    </Modal>
+  );
+}
+
 // ImageModal component for zooming in on images
 function ImageModal({ show, handleClose, src, alt }) {
   return (
@@ -49,15 +65,15 @@ function ImageModal({ show, handleClose, src, alt }) {
 
 function Wiki({ setSelectedMenu }) {
   // State for Image Modal
+  const [chartModalShow, setChartModalShow] = useState({ show: false, chart: '' });
   const [modalShow, setModalShow] = useState(false);
 
-  // Corrected Mermaid sequence diagram with single quotes
-  const diagramDefinition = `
+  const receiverInitiatedDiagramDefinition = `
     sequenceDiagram
-      participant Alice as Receiver (Alice)
+      participant Alice as Receiver (Alice, 4.1/5.0)
       participant SC as Palket Contract
-      participant Bob as Sender (Bob)
-      participant Charlie as Potential Sender (Charlie)
+      participant Bob as Sender (Bob, 4.4/5.0)
+      participant Charlie as Potential Sender (Charlie, 3.3/5.0)
 
       Alice->>SC: createOfferByReceiver("Need this laptop https://amazon.com/laptop")
       activate SC
@@ -86,19 +102,92 @@ function Wiki({ setSelectedMenu }) {
       activate Alice
       Alice->>SC: Transfer 1500 USDC
       deactivate Alice
-      SC->>Charlie: Transfer 495 USDC
+      SC->>SC: SetAvailableRefunds(CharlieAddress,495)      
       SC->>SC: Offer's state updated to "Accepted"
+      deactivate SC
+
+      Charlie->>SC: requestRefund()
+      activate SC
+      SC->>Charlie: Transfer 495 USDC      
       deactivate SC
 
       Bob->>Alice: Computer
 
       Alice->>SC: finalizeOffer(AliceOffer, 5stars)
       activate SC
-      SC->>Bob: Transfer 1500 USDC
-      SC->>Alice: Transfer 490 USDC
+      SC->>SC: SetAvailableRefunds(AliceAddress,490)      
+      SC->>SC: SetAvailableRefunds(BobAddress,1500)
       SC->>SC: Offer's state updated to "Finalized"
       deactivate SC
 
+      Alice->>SC: requestRefund()
+      activate SC
+      SC->>Alice: Transfer 490 USDC      
+      deactivate SC
+
+      Bob->>SC: requestRefund()
+      activate SC
+      SC->>Bob: Transfer 1500 USDC      
+      deactivate SC
+  `;
+
+  const senderInitiatedDiagramDefinition = `
+    sequenceDiagram
+      participant Alice as Receiver (Alice, 4.1/5.0)
+      participant Charlie as Potential Receiver (Charlie, 3.3/5.0)
+      participant SC as Palket Contract
+      participant Bob as Sender (Bob, 4.4/5.0)
+
+      Bob->>SC: createOfferBySender("Selling this laptop for 1000 USDC https://amazon.com/laptop")
+      activate SC
+      SC->>SC: Offer's state updated to "Created"
+      deactivate SC
+
+      Alice->>SC: requestParticipation(BobOffer)
+      activate SC
+      SC->>Alice: Request transfer of 1500 USDC
+      activate Alice
+      Alice->>SC: Transfer 1500 USDC
+      deactivate Alice
+      deactivate SC
+
+      Charlie->>SC: requestParticipation(BobOffer)
+      activate SC
+      SC->>Charlie: Request transfer of 1500 USDC
+      activate Charlie
+      Charlie->>SC: Transfer 1500 USDC
+      deactivate Charlie
+      deactivate SC
+
+      Bob->>SC: chooseParticipant(BobOffer, AliceAddress)
+      activate SC
+      SC->>SC: SetAvailableRefunds(CharlieAddress,1500)      
+      SC->>SC: Offer's state updated to "Accepted"
+      deactivate SC
+
+      Charlie->>SC: requestRefund()
+      activate SC
+      SC->>Charlie: Transfer 1500 USDC      
+      deactivate SC
+
+      Bob->>Alice: Computer
+
+      Alice->>SC: finalizeOffer(BobOffer, 5stars)
+      activate SC
+      SC->>SC: SetAvailableRefunds(AliceAddress,490)      
+      SC->>SC: SetAvailableRefunds(BobAddress,1500)
+      SC->>SC: Offer's state updated to "Finalized"
+      deactivate SC
+
+      Alice->>SC: requestRefund()
+      activate SC
+      SC->>Alice: Transfer 490 USDC      
+      deactivate SC
+
+      Bob->>SC: requestRefund()
+      activate SC
+      SC->>Bob: Transfer 1500 USDC      
+      deactivate SC
   `;
 
   return (
@@ -207,117 +296,125 @@ function Wiki({ setSelectedMenu }) {
             {/* How It Works */}
             <section id="how-it-works">
               <h4>How It Works</h4>
-              <p>
-                Below is both a short overview of how the Palket process typically unfolds 
-                and a specific, Receiver-initiated example illustrating the steps in detail.
-              </p>
+              <Row className="mb-3">
+                <Col md={6}><h5><strong className="text-receiver">Receiver</strong>-Initiated Offers</h5></Col>
+                <Col md={6}><h5><strong className="text-sender">Sender</strong>-Initiated Offers</h5></Col>
+              </Row>
 
-              <ol>
-                <li>
-                  <strong>Offer Creation:</strong> A Pal creates an offer describing the product 
-                  or service.
-                  <ul>
-                    <li>
-                      <strong className="text-receiver">Receiver</strong><strong>-Initiated Offers</strong>. If the Pal is a <strong className="text-receiver">Receiver</strong>, they do not need to
-                      lock any money, since the price will come from the bids. The offer state is <em>Created</em>.
-                    </li>
-                    <li>
-                      <strong className="text-sender">Sender</strong><strong>-Initiated Offers</strong>. If the Pal is a <strong className="text-sender">Sender</strong>, they lock a deposit of 
-                      50% of the offer’s price. The offer state is <em>Created</em>.
-                    </li>
-                    <li>
-                      For example, if Alice wants to buy a laptop from Amazon, she can create an offer with 
-                      the following description "Need this laptop https://amazon.com/laptop". Since she is
-                      a <strong className="text-receiver">Receiver</strong>, she does not lock any money yet.
-                    </li>
-                  </ul>
-                </li>
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>1. Offer Creation</strong>
+                  <p>
+                    The <strong className="text-receiver">Receiver</strong> can create an offer by providing a product description without locking funds since the price will be determined from the <strong className="text-sender">Sender</strong>'s proposals. The offer state is set to <em>Created</em>.
+                  </p>
+                </Col>
+                <Col md={6}>
+                  <strong>1. Offer Creation</strong>
+                  <p>
+                    The <strong className="text-sender">Sender</strong> can create an offer by providing a product description and the product price. The <strong className="text-sender">Sender</strong> will then lock a deposit of 50% of the offer’s price. The offer state is set to <em>Created</em>.
+                  </p>
+                </Col>
+              </Row>
 
-                <li>
-                  <strong>Canceling:</strong> The offer can be canceled by the creator at any time 
-                  while it is still in <em>Created</em> state. The locked amount is returned (if any), 
-                  and the offer state changes to <em>Cancelled</em>.
-                </li>
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>2. Canceling</strong>
+                  <p>
+                    The offer can be canceled at any time while still in the <em>Created</em> state. Any locked funds will available to be returned by the Pal that provided them from <Button variant="link" onClick={() => setSelectedMenu('Profile')} className="p-0"> <strong>Profile</strong> </Button>{' '} section.
+                  </p>
+                </Col>
+                <Col md={6}>
+                  <strong>2. Canceling</strong>
+                  <p>
+                    The offer can be canceled at any time while still in the <em>Created</em> state. Any locked funds will available to be returned by the Pal that provided them from <Button variant="link" onClick={() => setSelectedMenu('Profile')} className="p-0"> <strong>Profile</strong> </Button>{' '} section.
+                  </p>
+                </Col>
+              </Row>
 
-                <li>
-                  <strong>Participation Requests:</strong> The opposite role can request to participate.
-                  <ul>
-                    <li>
-                      <strong className="text-receiver">Receiver</strong><strong>-Initiated Offers</strong>. If a <strong className="text-sender">Sender</strong> places a bid, they must lock a deposit of 50% 
-                      of the bid price. The offer is then marked as <em>Accepted</em>.
-                    </li>
-                    <li>
-                      <strong className="text-sender">Sender</strong><strong>-Initiated Offers</strong>. If a <strong className="text-receiver">Receiver</strong> wants to accept an offer, they lock 100% of 
-                      the product/service cost + 49% deposit + 1% fee (totaling 150% of the offer price).
-                      The offer is then marked as <em>Accepted</em>.
-                    </li>
-                    <li>
-                      For example, Bob may see Alice's offer, check that the Amazon product from the link 
-                      is selling for $950 and requests to participate by placing a bid of $1000 for a profit of $50.
-                      When placing the bid, Bob will need to lock a deposit of $500.
-                    </li>
-                  </ul>
-                </li>
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>3. Participation Request</strong>
+                  <p>
+                    Any <strong className="text-sender">Sender</strong> can place a bid with a price, locking a deposit of 50% of the bid price.
+                  </p>
+                </Col>
+                <Col md={6}>
+                  <strong>3. Participation Request</strong>
+                  <p>
+                    Any <strong className="text-receiver">Receiver</strong> can send a request to accept the offer, locking 150% of the price (100% cost, 49% deposit, and 1% fee). 
+                  </p>
+                </Col>
+              </Row>
 
-                <li>
-                  <strong>Choosing a Participant:</strong> 
-                  <ul>
-                    <li>
-                      <strong className="text-receiver">Receiver</strong><strong>-Initiated Offers</strong>. There is an extra step to select the preferred bid.
-                      After the selection, the <strong className="text-receiver">Receiver</strong> locks the total 
-                      of 150% (100% price + 49% deposit + 1% fee). Other bidders get refunded automatically, and 
-                      the offer is marked <em>Accepted</em>.
-                    </li>
-                    <li>
-                      <strong className="text-sender">Sender</strong><strong>-Initiated Offers</strong>. When a <strong className="text-receiver">Receiver</strong> accepts
-                      <strong className="text-sender">Sender</strong> offer, the offer is automatically <em>Accepted</em>, so the <strong className="text-sender">Sender</strong> does
-                      not need to accept any bid.
-                      50% of the offer’s price. The offer state is <em>Created</em>.
-                    </li>
-                    <li>
-                      In the example, Alice reviews the bids and sees that Bob's bid is not the cheapest, but Bob 
-                      has a record of successful trades and a score of 4.5/5.0. She finali decides to choose him 
-                      as the participant. She then locks the total of 150% ($1500). Any other participants are refunded, 
-                      and the offer state is updated to <em>Accepted</em>.
-                    </li>
-                  </ul>
-                </li>
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>4. Choosing a Participant</strong>
+                  <p>
+                    The <strong className="text-receiver">Receiver</strong> reviews incoming bids and selects the preferred bid, locking 150% of the bid price (100% cost + 49% deposit + 1% fee) and triggering the refund of the rest of the bidders. The offer is then marked as <em>Accepted</em>.
+                  </p>
+                </Col>
+                <Col md={6}>
+                  <strong>4. Choosing a Participant</strong>
+                  <p>
+                  The <strong className="text-sender">Sender</strong> reviews incoming bids and selects the preferred bid, locking 50% of the bid price as deposit and triggering the refund of the rest of the bidders. The offer is then marked as <em>Accepted</em>.
+                  </p>
+                </Col>
+              </Row>
 
-                <li>
-                  <strong>Finalization:</strong> The <strong className="text-receiver">Receiver</strong> finalizes the offer, 
-                  unlocking funds in the smart contract.
-                  <ul>
-                    <li>
-                      The <strong className="text-receiver">Receiver</strong> recovers their 49% deposit.
-                    </li>
-                    <li>
-                      The <strong className="text-sender">Sender</strong> receives the product/service cost + their 50% deposit.
-                    </li>
-                    <li>
-                      In the example, after receiving the laptop from Bob, Alice confirms the exchange and provides a rating for Bob. The smart contract then:
-                      <ul>
-                        <li>Returns Alice's deposit ($490)</li>
-                        <li>Transfers the product value ($1000) + Bob's deposit ($500) to Bob</li>
-                      </ul>
-                    </li>
-                  </ul>
-                </li>
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>5. Finalization</strong>
+                  <p>
+                    The <strong className="text-receiver">Receiver</strong> finalizes the offer. This action unlocks funds: the <strong className="text-receiver">Receiver</strong> recovers 49% of their locked amount while the <strong className="text-sender">Sender</strong> receives the product cost plus their 50% deposit.
+                  </p>
+                </Col>
+                <Col md={6}>
+                  <strong>5. Finalization</strong>
+                  <p>
+                    The <strong className="text-receiver">Receiver</strong> finalizes the offer. This action unlocks funds: the <strong className="text-receiver">Receiver</strong> recovers 49% of their locked amount while the <strong className="text-sender">Sender</strong> receives the product cost plus their 50% deposit.
+                  </p>
+                </Col>
+              </Row>
 
-                <li>
-                  <strong>Lottery (Forfeiture):</strong> If an offer remains <em>Accepted</em> for
-                  over 180 days, anyone can trigger a forfeiture:
-                  <ul>
-                    <li>10% of the locked money goes to the user triggering the lottery.</li>
-                    <li>10% goes to the contract creator.</li>
-                    <li>80% goes to a randomly selected Pal who has interacted with Palket.</li>
-                  </ul>
-                </li>
-              </ol>
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>6. Lottery (Forfeiture)</strong>
+                  <p>
+                    If an offer remains in the <em>Accepted</em> state for over 180 days, anyone can trigger a forfeiture. In this case, 10% of the locked funds goes to the trigger, 10% to the contract creator, and 80% to a randomly selected participant.
+                  </p>
+                </Col>
+                <Col md={6}>
+                  <strong>6. Lottery (Forfeiture)</strong>
+                  <p>
+                    If an offer remains in the <em>Accepted</em> state for over 180 days, anyone can trigger a forfeiture. In this case, 10% of the locked funds goes to the trigger, 10% to the contract creator, and 80% to a randomly selected participant.
+                  </p>
+                </Col>
+              </Row>
 
-              <p>
-                Below is a sequence diagram illustrating the Receiver-initiated exchange between Alice and Bob.
-              </p>
-              <MermaidChart chart={diagramDefinition} />
+              <Row className="process-step mb-3">
+                <Col md={6}>
+                  <strong>7. Example</strong>
+                  <div 
+                    className="zoomable-diagram" 
+                    onClick={() => setChartModalShow({ show: true, chart: receiverInitiatedDiagramDefinition })}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <MermaidChart chart={receiverInitiatedDiagramDefinition} />
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <strong>7. Example</strong>
+                  <div 
+                    className="zoomable-diagram"
+                    onClick={() => setChartModalShow({ show: true, chart: senderInitiatedDiagramDefinition })}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <MermaidChart chart={senderInitiatedDiagramDefinition} />
+                  </div>
+                </Col>
+              </Row>
+
+              
             </section>
 
             {/* Security & Arbitration */}
