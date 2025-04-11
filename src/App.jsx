@@ -46,8 +46,6 @@ import Chat from './Chat';
 
 import Wiki from './Wiki';
 
-// Removed React Router usage to simplify
-
 const xmtpEnv = 'production'; // 'dev' / 'production'
 
 /** =====================
@@ -1173,7 +1171,6 @@ function App() {
       
       // If the account has changed, clear account-specific state.
       if (account && tempAccount.toLowerCase() !== account.toLowerCase()) {
-        setXmtpClient(null);
         setSelectedProfileAddress(tempAccount);
       }
       
